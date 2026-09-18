@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden">
+        <button onClick="{{ cal.prev }}" aria-label="Zurück" style="border:0;background:var(--surface);padding:6px 12px;cursor:pointer" style-hover="background:var(--surface2)">‹</button>
+        <button onClick="{{ cal.today }}" style="border:0;border-inline:1px solid var(--line2);background:var(--surface);padding:6px 12px;cursor:pointer;font-size:13px" style-hover="background:var(--surface2)">Heute</button>
+        <button onClick="{{ cal.next }}" aria-label="Weiter" style="border:0;background:var(--surface);padding:6px 12px;cursor:pointer" style-hover="background:var(--surface2)">›</button>
+      </div>
+      <div style="font-weight:600;font-size:15px;letter-spacing:-.01em">{{ cal.title }}</div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted)">{{ cal.subtitle }}</div>
+      <div style="margin-inline-start:auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:12px;font-size:12px;color:var(--muted)"><span style="display:flex;gap:6px;align-items:center"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>Leitung</span><span style="display:flex;gap:6px;align-items:center"><span style="width:8px;height:8px;border-radius:50%;background:var(--alt)"></span>Stellvertretung</span><span style="display:flex;gap:6px;align-items:center"><span style="width:8px;height:8px;border-radius:50%;background:var(--line2)"></span>Abwesenheit</span></div>
+        <div style="display:flex;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden"><button onClick="{{ cal.setWeek }}" aria-pressed="{{ cal.isWeek }}" style="border:0;padding:6px 14px;cursor:pointer;font-size:13px;background:{{ cal.weekBg }};color:{{ cal.weekColor }}">Woche</button><button onClick="{{ cal.setMonth }}" aria-pressed="{{ cal.isMonth }}" style="border:0;border-inline-start:1px solid var(--line2);padding:6px 14px;cursor:pointer;font-size:13px;background:{{ cal.monthBg }};color:{{ cal.monthColor }}">Monat</button></div>
+      </div>
+    </div>
+
+    <sc-if value="{{ cal.isWeek }}" hint-placeholder-val="{{ true }}">
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);overflow:auto">
+        <div style="display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));min-width:900px">
+          <sc-for list="{{ cal.days }}" as="d" hint-placeholder-count="6">
+            <div style="border-inline-end:1px solid var(--line);display:flex;flex-direction:column;min-height:320px;background:{{ d.bg }}">
+              <div style="padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:6px"><span style="font-weight:600;font-size:13px;color:{{ d.color }}">{{ d.wd }}</span><span style="font-family:var(--mono);font-size:12px;color:{{ d.color }}">{{ d.date }}</span><sc-if value="{{ d.isToday }}" hint-placeholder-val="{{ false }}"><span style="margin-inline-start:auto;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);font-weight:600">heute</span></sc-if></div>
+              <div style="padding:8px;display:flex;flex-direction:column;gap:6px">
+                <sc-if value="{{ d.absence }}" hint-placeholder-val="{{ false }}"><div style="border-radius:var(--r);padding:8px 10px;font-size:12px;background:var(--surface2);color:var(--muted);border:1px dashed var(--line2)">{{ d.absence }}</div></sc-if>
+                <sc-for list="{{ d.events }}" as="e" hint-placeholder-count="0">
+                  <div style="border-radius:var(--r);padding:8px 10px;font-size:12px;line-height:1.4;background:{{ e.soft }};border-inline-start:3px solid {{ e.color }};display:flex;flex-direction:column;gap:2px">
+                    <div style="display:flex;justify-content:space-between;gap:6px"><span style="font-family:var(--mono);color:var(--muted)">{{ e.time }}</span><span style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;color:{{ e.color }}">{{ e.roleLabel }}</span></div>
+                    <div style="font-weight:600">{{ e.code }} · {{ e.name }}</div>
+                    <div style="color:var(--muted)">{{ e.locName }} · Tag {{ e.dayNo }}/{{ e.dayTotal }} · {{ e.enrolled }} Teilnehmende</div>
+                    <div style="display:flex;flex-direction:column;margin-top:4px;border-top:1px solid oklch(0 0 0/.08)">
+                      <sc-for list="{{ e.blocks }}" as="b" hint-placeholder-count="1"><div style="display:grid;grid-template-columns:auto 1fr;gap:2px 8px;padding:5px 0;border-bottom:1px solid oklch(0 0 0/.06)"><span style="font-family:var(--mono);color:var(--muted);font-size:11px">{{ b.time }}</span><span style="font-weight:500">{{ b.room }}</span><span></span><span style="color:var(--muted)">{{ b.label }}</span></div></sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ cal.isMonth }}" hint-placeholder-val="{{ false }}">
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);overflow:hidden">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--line)">
+          <sc-for list="{{ cal.weekdays }}" as="w" hint-placeholder-count="7"><div style="padding:8px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500">{{ w }}</div></sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr)">
+          <sc-for list="{{ cal.cells }}" as="c" hint-placeholder-count="35">
+            <div style="min-height:96px;padding:6px 8px;border-bottom:1px solid var(--line);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;gap:4px;background:{{ c.bg }};opacity:{{ c.opacity }}">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--mono);font-size:12px;font-weight:{{ c.weight }};color:{{ c.color }}">{{ c.day }}</span><sc-if value="{{ c.kwLabel }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.goWeek }}" style="border:0;background:none;padding:0;font-size:10px;color:var(--muted);cursor:pointer" style-hover="color:var(--accent)">{{ c.kwLabel }}</button></sc-if></div>
+              <sc-if value="{{ c.absence }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--muted);border:1px dashed var(--line2);border-radius:3px;padding:1px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.absence }}</div></sc-if>
+              <sc-for list="{{ c.events }}" as="e" hint-placeholder-count="0"><button onClick="{{ e.goWeek }}" title="{{ e.title }}" style="text-align:start;border:0;font-size:11px;border-radius:3px;padding:2px 6px;background:{{ e.soft }};color:{{ e.color }};border-inline-start:2px solid {{ e.color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-weight:500">{{ e.code }} {{ e.locName }}</button></sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <section style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);overflow:hidden">
+      <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)"><h2 style="margin:0;font-size:14px;font-weight:600">Alle Einsätze</h2><span style="margin-inline-start:auto;font-size:12px;color:var(--muted)">{{ leadCount }} als Leitung · {{ backupCount }} als Stellvertretung</span></div>
+      <sc-for list="{{ rows }}" as="c" hint-placeholder-count="3">
+        <div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:var(--pad) 16px;border-bottom:1px solid var(--line)">
+          <span style="font-family:var(--mono);font-size:12px;background:var(--surface2);border-radius:var(--r);padding:2px 6px">{{ c.code }}</span>
+          <span><span style="display:block;font-weight:500">{{ c.name }}</span><span style="display:block;font-size:12px;color:var(--muted)">{{ c.locName }} · {{ c.roomsLabel }} · {{ c.enrolled }} Teilnehmende · Sprache {{ c.lang }}</span></span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--muted);text-align:end"><span style="display:block">{{ c.dateRange }}</span><span style="display:block">KW {{ c.kw }} · {{ c.dayRange }}</span></span>
+          <span style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;color:{{ c.roleColor }};background:{{ c.roleSoft }};border-radius:999px;padding:3px 8px">{{ c.roleLabel }}</span>
+        </div>
+      </sc-for>
+      <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}"><div style="padding:16px;color:var(--muted);font-size:13px">Keine Einsätze im Zeitraum.</div></sc-if>
+    </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:700},&quot;cal&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;},&quot;rows&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;array&quot;},&quot;leadCount&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;backupCount&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;empty&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}"></script>
+</body>
+</html>

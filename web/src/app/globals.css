@@ -1,26 +1,30 @@
-@import "tailwindcss";
+/* Prototype stylesheet from SVBL Planung.dc.html (helmet <style>) plus generated pseudo-class rules (style-hover / style-active). */
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+:root{--font:var(--font-plex-sans),Helvetica,Arial,sans-serif;--mono:var(--font-plex-mono),ui-monospace,monospace;--bg:oklch(0.975 0.004 80);--surface:#fff;--surface2:oklch(0.955 0.005 80);--line:oklch(0.9 0.006 80);--line2:oklch(0.85 0.008 80);--ink:oklch(0.22 0.012 80);--muted:oklch(0.5 0.012 80);--accent:oklch(0.45 0.13 250);--accent-ink:#fff;--accent-soft:oklch(0.93 0.035 250);--ok:oklch(0.55 0.13 150);--ok-soft:oklch(0.94 0.05 150);--warn:oklch(0.68 0.15 75);--warn-soft:oklch(0.95 0.06 80);--bad:oklch(0.55 0.19 25);--bad-soft:oklch(0.94 0.05 25);--alt:oklch(0.5 0.12 320);--alt-soft:oklch(0.94 0.04 320);--r:6px;--r2:10px;--pad:10px}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+*{box-sizing:border-box}
+input,select,textarea,button{font-family:inherit;font-size:inherit;color:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+::placeholder{color:var(--muted)}
+select{appearance:none;-webkit-appearance:none;border:1px solid var(--line2);border-radius:var(--r);background-color:var(--surface);background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23737068' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;line-height:1.3;cursor:pointer;text-overflow:ellipsis}
+select[style*="min-height:30px"],select[style*="min-height: 30px"]{background-position:right 9px center}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(6px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes modalIn{from{opacity:0;transform:translate(-50%,-50%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes slideIn{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+.scp0:active{transform:scale(0.96) !important}
+.scp1:hover{border-color:var(--accent) !important}
+.scp2:hover{background:var(--surface2) !important}
+.scp3:hover{background:var(--surface2) !important;color:var(--ink) !important}
+.scp4:hover{border-color:var(--accent) !important;color:var(--accent) !important}
+.scp5:hover{border-color:var(--line2) !important;box-shadow:0 1px 3px oklch(0 0 0/.08) !important}
+.scp6:hover{background:var(--accent-soft) !important}
+.scp7:hover{color:var(--bad) !important}
+.scp8:hover{background:var(--bad-soft) !important}
+.scp9:hover{border-color:var(--ok) !important;color:var(--ok) !important}
+.scp10:hover{border-color:var(--bad) !important;color:var(--bad) !important}
+.scp11:hover{box-shadow:0 1px 4px oklch(0 0 0/.14) !important}
+.scp0:hover{background:var(--surface2) !important}
+.scp1:hover{color:var(--accent) !important}
