@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@userback/widget':
+        specifier: ^0.3.13
+        version: 0.3.13
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -750,6 +753,9 @@ packages:
     resolution: {integrity: sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA==}
     cpu: [x64]
     os: [win32]
+
+  '@userback/widget@0.3.13':
+    resolution: {integrity: sha512-L2EKTwBHu2ZBQsi12SN6CKl5dwYhxfjC88MSFVdROffaP6Cs/dQJI+SRSwjEuFRKN8zDtp8XwPhxgGLLsdtYXw==}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -2638,6 +2644,8 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
+
+  '@userback/widget@0.3.13': {}
 
   acorn-jsx@5.3.2(acorn@8.18.0):
     dependencies:
