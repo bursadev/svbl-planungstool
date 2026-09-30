@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
+import { AuthTokenBridge } from "@/components/auth-token-bridge";
 import { UserbackWidget } from "@/components/userback-widget";
 
 const plexSans = IBM_Plex_Sans({
@@ -24,11 +26,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="de" className={`${plexSans.variable} ${plexMono.variable}`}>
-      <body>
-        {children}
-        <UserbackWidget />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="de" className={`${plexSans.variable} ${plexMono.variable}`}>
+        <body>
+          <AuthTokenBridge />
+          {children}
+          <UserbackWidget />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
