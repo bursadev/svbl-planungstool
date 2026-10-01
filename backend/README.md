@@ -39,6 +39,8 @@ Authentication uses [Clerk](https://clerk.com). The web app sends the Clerk sess
 - `GET /me` returns `{ userId }`, which is handy for checking the setup.
 - `CLERK_AUTHORIZED_PARTIES` lists the frontend origins allowed to call the API.
 
+Roles live in Clerk as `publicMetadata.role` (`planner`, `sales`, `management`, `instructor`, `trainer`, `admin`). Put it into the session token once in the Clerk dashboard (Sessions → Customize session token): `{ "role": "{{user.public_metadata.role}}", "email": "{{user.primary_email_address}}", "name": "{{user.full_name}}" }`; without the claims the guard fetches the user from Clerk's API and caches it for 10 minutes. Every signed-in role may read; `planner` and `admin` may write (`@Roles()`). In development, `AUTH_DEFAULT_ROLE` gives accounts without a role in Clerk a role; it is ignored when `NODE_ENV=production`. The signed-in user is mirrored into the `user` table on first request.
+
 ## Deploying to Heroku
 
 The backend lives in `backend/` of the monorepo and deploys as its own Heroku app.
@@ -72,9 +74,27 @@ git push heroku main
 
 Check the deploy with `curl https://<app>.herokuapp.com/health`.
 
+## API
+
+REST, plural English nouns, arrays with server-side filters, no pagination. Every error is `{ statusCode, message, errors?: [{ field, message }] }` with German messages the UI shows unchanged; validation runs through `class-validator` DTOs (`src/<module>/dto/`). Writes produce an `audit_entry`.
+
+| Resource | Routes |
+| --- | --- |
+| Standorte | `/locations` (+ `?q=`), `/locations/:id/rooms`, `/rooms/:id` |
+| Kataloge | `/skills`, `/certificate-types` (+ `PUT /:id/maintenance-course-types`), `/device-types` (+ `PUT /:id/qualifications`) |
+| Geräte | `/devices` (+ filters), `/devices/:id/moves`, `/device-moves/:id`, `/devices/:id/maintenance-windows`, `/maintenance-windows/:id` |
+| Ausbilder | `/instructors` (+ filters), `PUT /instructors/:id/skills`, `/instructors/:id/certificates`, `/instructor-certificates/:id`, `/instructors/:id/availabilities`, `/availabilities/:id` (+ `/approve`, `/reject`) |
+| Kurstypen | `/course-types` (+ `PUT /:id/requirements`) |
+| Bildungsplan | `/curriculum-modules` (+ `?track=`), `/cohorts`, `/time-windows` (+ `?cohortId=`) |
+| Berufsschulen | `/vocational-schools`, `/vocational-schools/:id/classes`, `/school-classes/:id` (+ `PUT /:id/days`) |
+| Lernende | `GET /apprentices` (+ filters), `GET /apprentices/:id` |
+| Me | `GET /me` |
+
+Design: `docs/superpowers/specs/2026-10-01-stammdaten-crud-design.md`.
+
 ## Tests
 
 ```bash
 pnpm test       # unit
-pnpm test:e2e   # needs the database running
+pnpm test:e2e   # needs the database; replaces the Clerk guard with a header stub (x-test-role)
 ```
