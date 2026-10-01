@@ -151,13 +151,11 @@ describe('Locations (e2e)', () => {
     const type = await ds
       .getRepository(DeviceType)
       .save({ code: 'E2E-DT', name: 'Test', category: 'other' });
-    await ds
-      .getRepository(Device)
-      .save({
-        deviceTypeId: type.id,
-        inventoryNumber: 'E2E-DEV',
-        homeLocationId: loc.body.id,
-      });
+    await ds.getRepository(Device).save({
+      deviceTypeId: type.id,
+      inventoryNumber: 'E2E-DEV',
+      homeLocationId: loc.body.id,
+    });
 
     const res = await api()
       .delete(`/locations/${loc.body.id}`)

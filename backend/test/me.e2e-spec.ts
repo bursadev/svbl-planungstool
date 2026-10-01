@@ -13,14 +13,8 @@ describe('Me (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app
-      .get(DataSource)
-      .getRepository(User)
-      .delete({ clerkUserId: 'test_planner' });
-    await app
-      .get(DataSource)
-      .getRepository(User)
-      .delete({ clerkUserId: 'test_instructor' });
+    // The test_* user rows stay: other test files run in parallel and
+    // reference them from audit entries.
     await app.close();
   });
 

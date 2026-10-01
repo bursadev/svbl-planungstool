@@ -40,24 +40,21 @@ export class UsersService {
       return cached.dbUserId;
     }
 
-    let user = await this.users.findOne({
-      where: { clerkUserId: profile.userId },
-    });
-    const displayName = profile.displayName ?? profile.email;
-    if (!user) {
-      user = this.users.create({
+    // One statement (INSERT … ON CONFLICT), so two concurrent first requests
+    // of the same user can't race each other into a unique violation.
+    await this.users.upsert(
+      {
         clerkUserId: profile.userId,
         email: profile.email,
-        displayName,
+        displayName: profile.displayName ?? profile.email,
         role: profile.role,
-      });
-    } else {
-      user.email = profile.email;
-      user.displayName = displayName;
-      user.role = profile.role;
-    }
-    user.lastLoginAt = new Date();
-    await this.users.save(user);
+        lastLoginAt: new Date(),
+      },
+      { conflictPaths: ['clerkUserId'], skipUpdateIfNoValuesChanged: false },
+    );
+    const user = await this.users.findOneByOrFail({
+      clerkUserId: profile.userId,
+    });
 
     this.touched.set(profile.userId, { at: Date.now(), dbUserId: user.id });
     return user.id;
