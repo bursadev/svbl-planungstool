@@ -46,6 +46,12 @@ function columnLabel(column: string): string {
     short_name: 'Kurzname',
     ahv_number: 'AHV-Nummer',
     key: 'Schlüssel',
+    sequence: 'Die Reihenfolge',
+    course_type_id: 'Der Kurstyp',
+    start_year: 'Das Startjahr',
+    cohort_id: 'Der Jahrgang',
+    location_id: 'Der Standort',
+    weekday: 'Der Wochentag',
   };
   return labels[column] ?? 'Der Wert';
 }
