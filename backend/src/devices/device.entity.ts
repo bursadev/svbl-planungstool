@@ -4,6 +4,7 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   type Relation,
 } from 'typeorm';
 import { BaseEntity } from '../database/base.entity.js';
@@ -14,6 +15,7 @@ import {
   DeviceStatus,
 } from '../database/enums.js';
 import { Location } from '../locations/location.entity.js';
+import { DeviceMove } from './device-move.entity.js';
 import { DeviceType } from './device-type.entity.js';
 
 /** Gerät: one physical machine (forklift, aerial platform, crane) with its home location. */
@@ -68,4 +70,7 @@ export class Device extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+
+  @OneToMany(() => DeviceMove, (move) => move.device)
+  moves: Relation<DeviceMove>[];
 }
