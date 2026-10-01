@@ -14,7 +14,7 @@ import type { CourseType } from "@/lib/api/course-types";
 import { deleteCurriculumModule, type CurriculumModule } from "@/lib/api/curriculum";
 import { TRACK_LABELS, type Track } from "@/lib/format";
 import { ModuleDialog } from "./module-dialog";
-import { SectionHeader } from "./section-header";
+import { SectionHeader } from "@/components/data/section-header";
 
 const COLUMNS = 7;
 

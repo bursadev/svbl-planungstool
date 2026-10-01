@@ -19,7 +19,7 @@ import {
   type AvailabilityStatus,
   type CreateAvailability,
 } from "@/lib/api/instructors";
-import { AVAILABILITY_KIND_LABELS, AVAILABILITY_STATUS_LABELS } from "./labels";
+import { AVAILABILITY_KIND_LABELS, AVAILABILITY_STATUS_LABELS } from "@/lib/labels";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

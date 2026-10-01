@@ -106,22 +106,3 @@ export function replaceCourseTypeRequirements(
     body: dto,
   });
 }
-
-// --- Picker options -----------------------------------------------------------------------
-// Minimal shapes for the «Anforderungen» dialog; the Kataloge slice owns the full types.
-
-export type SkillOption = { id: string; name: string; active: boolean };
-export type CertificateTypeOption = { id: string; code: string; name: string };
-export type DeviceTypeOption = { id: string; code: string; name: string };
-
-export function listSkillOptions(fetcher: ApiFetcher = apiFetch): Promise<SkillOption[]> {
-  return fetcher<SkillOption[]>("/skills");
-}
-
-export function listCertificateTypeOptions(fetcher: ApiFetcher = apiFetch): Promise<CertificateTypeOption[]> {
-  return fetcher<CertificateTypeOption[]>("/certificate-types");
-}
-
-export function listDeviceTypeOptions(fetcher: ApiFetcher = apiFetch): Promise<DeviceTypeOption[]> {
-  return fetcher<DeviceTypeOption[]>("/device-types");
-}

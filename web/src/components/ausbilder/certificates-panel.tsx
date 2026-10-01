@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/form";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError } from "@/lib/api";
-import type { CertificateTypeRef } from "@/lib/api/certificate-types-ref";
+import type { CertificateType } from "@/lib/api/certificate-types";
 import { deleteCertificate, type InstructorCertificate } from "@/lib/api/instructors";
 import { formatDate } from "@/lib/format";
 import { CertificateDialog } from "./certificate-dialog";
@@ -20,7 +20,7 @@ const COLUMNS = 6;
 type CertificatesPanelProps = {
   instructorId: string;
   certificates: InstructorCertificate[];
-  types: CertificateTypeRef[];
+  types: CertificateType[];
 };
 
 /** Tab «Zertifikate»: table with per-row edit and delete, plus «Zertifikat erfassen». */

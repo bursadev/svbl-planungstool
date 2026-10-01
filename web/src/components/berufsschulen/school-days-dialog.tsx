@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { replaceSchoolClassDays, type ReplaceSchoolClassDays, type SchoolClass } from "@/lib/api/vocational-schools";
-import { WEEKDAYS, WEEKDAY_LABELS, currentSchoolYearStart, formatSchoolYear } from "./labels";
+import { WEEKDAYS, WEEKDAY_LABELS } from "@/lib/labels";
+import { currentSchoolYearStart, formatSchoolYear } from "./labels";
 
 const yearMessage = "Ganze Zahl zwischen 2000 und 2100.";
 

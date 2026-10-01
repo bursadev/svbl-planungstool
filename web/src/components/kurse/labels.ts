@@ -1,16 +1,7 @@
-import type { CourseKind, CourseType, WeekdayRule } from "@/lib/api/course-types";
+import type { CourseType } from "@/lib/api/course-types";
 import { LANGUAGE_LABELS } from "@/lib/format";
 
-export const COURSE_KIND_LABELS: Record<CourseKind, string> = {
-  uk: "ÜK",
-  adult: "Erwachsene",
-  exam: "Prüfung",
-};
-
-export const WEEKDAY_RULE_LABELS: Record<WeekdayRule, string> = {
-  weekdays: "Wochentage",
-  saturday: "Samstag",
-};
+/** Formatting helpers of the Kurse screens; enum labels live in `@/lib/labels`. */
 
 /** «2 Tage · Sa–Sa · wochenübergreifend»; the two qualifiers only when they apply. */
 export function formatDuration(type: Pick<CourseType, "durationDays" | "weekdayRule" | "maySpanWeeks">): string {

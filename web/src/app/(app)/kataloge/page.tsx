@@ -4,7 +4,8 @@ import { CertificateTypesPanel } from "@/components/kataloge/certificate-types-p
 import { DeviceTypesPanel } from "@/components/kataloge/device-types-panel";
 import { SkillsPanel } from "@/components/kataloge/skills-panel";
 import { PageHeader } from "@/components/shell/page-header";
-import { listCertificateTypes, listCourseTypeRefs } from "@/lib/api/certificate-types";
+import { listCertificateTypes } from "@/lib/api/certificate-types";
+import { listCourseTypes } from "@/lib/api/course-types";
 import { listDeviceTypes } from "@/lib/api/device-types";
 import { serverApiFetch } from "@/lib/api/server";
 import { listSkills } from "@/lib/api/skills";
@@ -22,7 +23,7 @@ export default async function KatalogePage() {
     listCertificateTypes(serverApiFetch),
     listDeviceTypes(serverApiFetch),
     // The Pflichtkurse picker degrades to a message when Kurstypen are unavailable.
-    listCourseTypeRefs(serverApiFetch)
+    listCourseTypes(serverApiFetch)
       .then((types) => types.map(({ id, code, name }) => ({ id, code, name })))
       .catch(() => null),
   ]);

@@ -1,13 +1,13 @@
+import { listSkills } from "@/lib/api/skills";
+import { listCertificateTypes } from "@/lib/api/certificate-types";
+import { listDeviceTypes } from "@/lib/api/device-types";
 import type { Metadata } from "next";
 import { CourseTypeCards } from "@/components/kurse/course-type-cards";
 import { CourseTypeFilters } from "@/components/kurse/course-type-filters";
 import { CreateCourseTypeButton } from "@/components/kurse/create-course-type-button";
 import { parseActive, parseKind, parseTrackFilter } from "@/components/kurse/search-params";
 import {
-  listCertificateTypeOptions,
   listCourseTypes,
-  listDeviceTypeOptions,
-  listSkillOptions,
 } from "@/lib/api/course-types";
 import { serverApiFetch } from "@/lib/api/server";
 
@@ -34,9 +34,9 @@ export default async function KurstypenPage({ searchParams }: KurstypenPageProps
   const [courseTypes, skills, certificateTypes, deviceTypes] = await Promise.all([
     listCourseTypes(serverApiFetch),
     // The pickers belong to the Kataloge slice; the dialog says so when one is unavailable.
-    listSkillOptions(serverApiFetch).catch(() => null),
-    listCertificateTypeOptions(serverApiFetch).catch(() => null),
-    listDeviceTypeOptions(serverApiFetch).catch(() => null),
+    listSkills(serverApiFetch).catch(() => null),
+    listCertificateTypes(serverApiFetch).catch(() => null),
+    listDeviceTypes(serverApiFetch).catch(() => null),
   ]);
 
   const visible = courseTypes.filter(

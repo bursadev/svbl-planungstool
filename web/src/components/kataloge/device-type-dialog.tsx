@@ -22,8 +22,8 @@ import {
   type DeviceType,
 } from "@/lib/api/device-types";
 import type { Skill } from "@/lib/api/skills";
-import { CheckboxList } from "./checkbox-list";
-import { DEVICE_CATEGORY_LABELS } from "./labels";
+import { CheckboxList } from "@/components/data/checkbox-list";
+import { DEVICE_CATEGORY_LABELS } from "@/lib/labels";
 
 /** Mirrors `CreateDeviceTypeDto`; the id arrays go to the separate PUT. */
 const schema = z.object({
@@ -112,11 +112,11 @@ export function DeviceTypeDialog({ open, onOpenChange, type, certificateTypes, s
   }
 
   // Inactive catalogue entries stay selectable only while they are already assigned.
-  const certificateOptions = certificateTypes.map((c) => ({ id: c.id, label: c.name, hint: c.code }));
+  const certificateOptions = certificateTypes.map((c) => ({ value: c.id, label: c.name, hint: c.code }));
   const assignedSkills = new Set(type?.qualifications.skills.map((s) => s.id) ?? []);
   const skillOptions = skills
     .filter((s) => s.active || assignedSkills.has(s.id))
-    .map((s) => ({ id: s.id, label: s.name, hint: s.category ?? undefined }));
+    .map((s) => ({ value: s.id, label: s.name, hint: s.category ?? undefined }));
 
   return (
     <FormDialog

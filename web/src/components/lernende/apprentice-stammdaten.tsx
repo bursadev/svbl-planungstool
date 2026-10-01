@@ -3,7 +3,7 @@ import { MetaItem, MetaList } from "@/components/data/meta";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Apprentice } from "@/lib/api/apprentices";
 import { LANGUAGE_LABELS, formatAddress, formatDate } from "@/lib/format";
-import { GENDER_LABELS } from "./labels";
+import { GENDER_LABELS } from "@/lib/labels";
 
 const dash = <span className="text-muted-foreground">–</span>;
 

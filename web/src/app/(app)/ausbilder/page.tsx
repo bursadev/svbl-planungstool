@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { listInstructors, type InstructorFilters } from "@/lib/api/instructors";
 import { listLocations } from "@/lib/api/locations";
 import { serverApiFetch } from "@/lib/api/server";
-import { listSkillRefs } from "@/lib/api/skills-ref";
+import { listSkills } from "@/lib/api/skills";
 
 export const metadata: Metadata = { title: "Ausbilder" };
 
@@ -54,7 +54,7 @@ export default async function AusbilderPage({ searchParams }: AusbilderPageProps
   const [instructors, skills, locations] = await Promise.all([
     listInstructors(filters, serverApiFetch),
     // The skill filter degrades to «Alle Skills» when the catalogue endpoint is unavailable.
-    listSkillRefs(serverApiFetch).catch(() => []),
+    listSkills(serverApiFetch).catch(() => []),
     listLocations(undefined, serverApiFetch),
   ]);
   const locationOptions = toLocationOptions(locations);

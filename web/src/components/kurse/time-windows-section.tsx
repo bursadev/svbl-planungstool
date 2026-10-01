@@ -12,9 +12,9 @@ import { ApiError } from "@/lib/api";
 import { deleteTimeWindow, type Cohort, type CurriculumModule, type TimeWindow } from "@/lib/api/curriculum";
 import type { Location } from "@/lib/api/locations";
 import { formatDate, TRACK_LABELS, type Track } from "@/lib/format";
-import { SectionHeader } from "./section-header";
+import { SectionHeader } from "@/components/data/section-header";
 import { TimeWindowDialog } from "./time-window-dialog";
-import { UrlSelect } from "./url-select";
+import { UrlSelect } from "@/components/data/url-select";
 
 const COLUMNS = 7;
 

@@ -4,7 +4,8 @@ import { UrlSelect } from "@/components/data/url-select";
 import { ApprenticesTable } from "@/components/lernende/apprentices-table";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { listApprentices, listCohortOptions } from "@/lib/api/apprentices";
+import { listApprentices } from "@/lib/api/apprentices";
+import { listCohorts } from "@/lib/api/curriculum";
 import { serverApiFetch } from "@/lib/api/server";
 import { listVocationalSchools } from "@/lib/api/vocational-schools";
 import { TRACK_LABELS, type Track } from "@/lib/format";
@@ -44,7 +45,7 @@ export default async function LernendePage({ searchParams }: LernendePageProps) 
   const [apprentices, schools, cohorts] = await Promise.all([
     listApprentices(filters, serverApiFetch),
     listVocationalSchools(serverApiFetch),
-    listCohortOptions(serverApiFetch),
+    listCohorts(serverApiFetch),
   ]);
 
   return (

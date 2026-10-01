@@ -112,7 +112,7 @@ export function ContactDialog({ open, onOpenChange, instructor, locations }: Con
           <FormItem>
             <FormLabel>Max. Reisezeit (Minuten)</FormLabel>
             <FormControl>
-              <NumberInput {...field} min={0} step={5} inputMode="numeric" placeholder="optional" />
+              <NumberInput {...field} nullable min={0} step={5} placeholder="optional" />
             </FormControl>
             <FormMessage />
           </FormItem>

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ApiError } from "@/lib/api";
 import { createCohort, updateCohort, type Cohort, type CreateCohort } from "@/lib/api/curriculum";
 import { TRACK_LABELS, type Track } from "@/lib/format";
-import { NumberInput } from "./number-input";
+import { NumberInput } from "@/components/data/number-input";
 
 const yearMessage = "Jahr zwischen 2000 und 2100.";
 const year = () => z.number({ error: yearMessage }).int(yearMessage).min(2000, yearMessage).max(2100, yearMessage);

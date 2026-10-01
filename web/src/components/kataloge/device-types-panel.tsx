@@ -15,7 +15,7 @@ import { ApiError } from "@/lib/api/client";
 import { deleteDeviceType, type DeviceType } from "@/lib/api/device-types";
 import type { Skill } from "@/lib/api/skills";
 import { DeviceTypeDialog } from "./device-type-dialog";
-import { DEVICE_CATEGORY_LABELS } from "./labels";
+import { DEVICE_CATEGORY_LABELS } from "@/lib/labels";
 
 const COLUMNS = 6;
 

@@ -11,11 +11,13 @@ const ALL = "__all__";
 export type UrlSelectOption = { value: string; label: string };
 
 type UrlSelectProps = {
-  /** Query parameter the selection is written to; removed for «Alle». */
+  /** Query parameter the selection is written to; removed for «Alle» or the default value. */
   param: string;
   options: UrlSelectOption[];
-  /** Label of the entry that clears the filter, e.g. «Alle Standorte». */
-  allLabel: string;
+  /** Entry that clears the filter, e.g. «Alle Standorte». Omit for selects that always have a value. */
+  allLabel?: string;
+  /** Option that stands for an absent parameter (e.g. the default track); selecting it removes the parameter. */
+  defaultValue?: string;
   /** Accessible name of the field, e.g. «Standort». */
   label: string;
   className?: string;
@@ -24,28 +26,31 @@ type UrlSelectProps = {
 /**
  * Filter select bound to a URL query parameter. Changing it rewrites the URL with `router.replace`,
  * which re-renders the Server Component page with the new filter. A value that is not among the
- * options (a deleted skill, a typo in the URL) shows as «Alle». Wrapped in `Suspense` like `SearchInput`.
+ * options (a deleted skill, a typo in the URL) falls back to «Alle» or the default. Wrapped in
+ * `Suspense` because `useSearchParams` requires it on prerendered pages.
  */
 export function UrlSelect(props: UrlSelectProps) {
   return (
-    <Suspense fallback={<SelectView {...props} value={ALL} disabled />}>
+    <Suspense fallback={<SelectView {...props} value={props.defaultValue ?? ALL} disabled />}>
       <SyncedSelect {...props} />
     </Suspense>
   );
 }
 
-function SyncedSelect({ param, options, allLabel, label, className }: UrlSelectProps) {
+function SyncedSelect(props: UrlSelectProps) {
+  const { param, options, defaultValue } = props;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const current = searchParams.get(param);
-  const value = current && options.some((option) => option.value === current) ? current : ALL;
+  const fallback = defaultValue ?? ALL;
+  const requested = searchParams.get(param);
+  const value = requested && options.some((option) => option.value === requested) ? requested : fallback;
 
   function handleChange(next: string) {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === ALL) params.delete(param);
+    if (next === fallback) params.delete(param);
     else params.set(param, next);
     const query = params.toString();
     startTransition(() => {
@@ -53,20 +58,10 @@ function SyncedSelect({ param, options, allLabel, label, className }: UrlSelectP
     });
   }
 
-  return (
-    <SelectView
-      options={options}
-      allLabel={allLabel}
-      label={label}
-      className={className}
-      value={value}
-      onValueChange={handleChange}
-      pending={isPending}
-    />
-  );
+  return <SelectView {...props} value={value} onValueChange={handleChange} pending={isPending} />;
 }
 
-type SelectViewProps = Omit<UrlSelectProps, "param"> & {
+type SelectViewProps = UrlSelectProps & {
   value: string;
   onValueChange?: (value: string) => void;
   pending?: boolean;
@@ -80,7 +75,7 @@ function SelectView({ options, allLabel, label, className, value, onValueChange,
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>{allLabel}</SelectItem>
+        {allLabel !== undefined ? <SelectItem value={ALL}>{allLabel}</SelectItem> : null}
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}

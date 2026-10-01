@@ -1,5 +1,6 @@
 "use client";
 
+import type { CourseType } from "@/lib/api/course-types";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,11 +16,10 @@ import {
   replaceMaintenanceCourseTypes,
   updateCertificateType,
   type CertificateType,
-  type CourseTypeRef,
   type CreateCertificateType,
 } from "@/lib/api/certificate-types";
 import { ApiError } from "@/lib/api/client";
-import { CheckboxList } from "./checkbox-list";
+import { CheckboxList } from "@/components/data/checkbox-list";
 
 const validityMessage = "Ganze Zahl von 1 bis 50.";
 const warningMessage = "Ganze Zahl von 1 bis 365.";
@@ -82,7 +82,7 @@ type CertificateTypeDialogProps = {
   /** Present for «Zertifikatstyp bearbeiten», absent for «Zertifikatstyp anlegen». */
   type?: CertificateType;
   /** Kurstypen for the Pflichtkurse picker; `null` when they could not be loaded. */
-  courseTypes: CourseTypeRef[] | null;
+  courseTypes: Pick<CourseType, "id" | "code" | "name">[] | null;
 };
 
 /** Create: POST then PUT the course types; edit: PATCH then PUT when the selection changed. */
@@ -267,7 +267,7 @@ export function CertificateTypeDialog({ open, onOpenChange, type, courseTypes }:
           <FormItem>
             <FormLabel>Anrechenbare Kurstypen</FormLabel>
             <CheckboxList
-              options={(courseTypes ?? []).map((c) => ({ id: c.id, label: c.name, hint: c.code }))}
+              options={(courseTypes ?? []).map((c) => ({ value: c.id, label: c.name, hint: c.code }))}
               value={field.value}
               onChange={field.onChange}
               emptyText={courseTypes ? "Noch keine Kurstypen erfasst." : "Kurstypen konnten nicht geladen werden."}

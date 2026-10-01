@@ -1,8 +1,8 @@
 "use client";
 
 import { TRACK_LABELS } from "@/lib/format";
-import { COURSE_KIND_LABELS } from "./labels";
-import { UrlSelect } from "./url-select";
+import { COURSE_KIND_LABELS } from "@/lib/labels";
+import { UrlSelect } from "@/components/data/url-select";
 
 const KIND_OPTIONS = Object.entries(COURSE_KIND_LABELS).map(([value, label]) => ({ value, label }));
 const TRACK_OPTIONS = [

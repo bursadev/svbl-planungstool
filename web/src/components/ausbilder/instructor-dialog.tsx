@@ -19,7 +19,7 @@ import {
   type Instructor,
   type UpdateInstructor,
 } from "@/lib/api/instructors";
-import { EMPLOYMENT_TYPE_LABELS, LANGUAGES, LANGUAGE_LABELS } from "./labels";
+import { EMPLOYMENT_TYPE_LABELS, LANGUAGES, LANGUAGE_LABELS } from "@/lib/labels";
 import type { LocationOption } from "./options";
 
 const optionalText = z.string().trim();
@@ -277,7 +277,7 @@ export function InstructorDialog({ open, onOpenChange, locations, instructor, on
             <FormItem>
               <FormLabel>Max. Reisezeit (Minuten)</FormLabel>
               <FormControl>
-                <NumberInput {...field} min={0} step={5} inputMode="numeric" placeholder="optional" />
+                <NumberInput {...field} nullable min={0} step={5} placeholder="optional" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -304,7 +304,7 @@ export function InstructorDialog({ open, onOpenChange, locations, instructor, on
                 <FormItem>
                   <FormLabel>Wochenstunden</FormLabel>
                   <FormControl>
-                    <NumberInput {...field} min={0} step={0.5} placeholder="optional" />
+                    <NumberInput {...field} nullable min={0} step={0.5} inputMode="decimal" placeholder="optional" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -317,7 +317,7 @@ export function InstructorDialog({ open, onOpenChange, locations, instructor, on
                 <FormItem>
                   <FormLabel>Überstundenlimit (h)</FormLabel>
                   <FormControl>
-                    <NumberInput {...field} min={0} step={0.5} placeholder="optional" />
+                    <NumberInput {...field} nullable min={0} step={0.5} inputMode="decimal" placeholder="optional" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

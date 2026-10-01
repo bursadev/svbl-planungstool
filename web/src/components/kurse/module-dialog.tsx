@@ -20,8 +20,8 @@ import {
   type CurriculumModule,
 } from "@/lib/api/curriculum";
 import { TRACK_LABELS, type Track } from "@/lib/format";
-import { CheckboxList } from "./checkbox-list";
-import { NumberInput } from "./number-input";
+import { CheckboxList } from "@/components/data/checkbox-list";
+import { NumberInput } from "@/components/data/number-input";
 
 const SEMESTERS = [1, 2, 3, 4, 5, 6];
 const integerMessage = "Ganze Zahl ab 1.";

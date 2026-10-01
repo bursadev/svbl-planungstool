@@ -1,5 +1,8 @@
 "use client";
 
+import type { Skill } from "@/lib/api/skills";
+import type { CertificateType } from "@/lib/api/certificate-types";
+import type { DeviceType } from "@/lib/api/device-types";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,20 +16,17 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   replaceCourseTypeRequirements,
-  type CertificateTypeOption,
   type CourseType,
-  type DeviceTypeOption,
   type ReplaceRequirements,
-  type SkillOption,
 } from "@/lib/api/course-types";
-import { CheckboxList } from "./checkbox-list";
-import { NumberInput } from "./number-input";
+import { CheckboxList } from "@/components/data/checkbox-list";
+import { NumberInput } from "@/components/data/number-input";
 
 /** Picker lists for the dialog; `null` when that catalogue could not be loaded. */
 export type RequirementOptions = {
-  skills: SkillOption[] | null;
-  certificateTypes: CertificateTypeOption[] | null;
-  deviceTypes: DeviceTypeOption[] | null;
+  skills: Skill[] | null;
+  certificateTypes: CertificateType[] | null;
+  deviceTypes: DeviceType[] | null;
 };
 
 const quantityMessage = "Ganze Zahl ab 1.";

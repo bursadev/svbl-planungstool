@@ -8,7 +8,7 @@ import { CertificatesPanel } from "@/components/ausbilder/certificates-panel";
 import { ContactCard } from "@/components/ausbilder/contact-card";
 import { InstructorActions } from "@/components/ausbilder/instructor-actions";
 import { KnowledgeCard } from "@/components/ausbilder/knowledge-card";
-import { EMPLOYMENT_TYPE_LABELS, INSTRUCTOR_STATUS_LABELS } from "@/components/ausbilder/labels";
+import { EMPLOYMENT_TYPE_LABELS, INSTRUCTOR_STATUS_LABELS } from "@/lib/labels";
 import { LanguageBadges } from "@/components/ausbilder/language-badges";
 import { toLocationOptions } from "@/components/ausbilder/options";
 import { SkillsPanel } from "@/components/ausbilder/skills-panel";
@@ -16,11 +16,11 @@ import { ActiveBadge, MetaItem, MetaList, UrlTabs } from "@/components/data";
 import { InitialsAvatar } from "@/components/data/initials-avatar";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { listCertificateTypeRefs } from "@/lib/api/certificate-types-ref";
+import { listCertificateTypes } from "@/lib/api/certificate-types";
 import { getInstructor } from "@/lib/api/instructors";
 import { listLocations } from "@/lib/api/locations";
 import { ApiError, serverApiFetch } from "@/lib/api/server";
-import { listSkillRefs } from "@/lib/api/skills-ref";
+import { listSkills } from "@/lib/api/skills";
 
 type AusbilderDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -53,8 +53,8 @@ export default async function AusbilderDetailPage({ params }: AusbilderDetailPag
     }),
     listLocations(undefined, serverApiFetch),
     // The pickers degrade to empty lists when a catalogue endpoint is unavailable.
-    listSkillRefs(serverApiFetch).catch(() => []),
-    listCertificateTypeRefs(serverApiFetch).catch(() => []),
+    listSkills(serverApiFetch).catch(() => []),
+    listCertificateTypes(serverApiFetch).catch(() => []),
   ]);
   if (!instructor) notFound();
 

@@ -2,8 +2,8 @@
 
 import { SearchInput } from "@/components/data";
 import { UrlSelect, type UrlSelectOption } from "@/components/data/url-select";
-import type { SkillRef } from "@/lib/api/skills-ref";
-import { EMPLOYMENT_TYPE_LABELS, INSTRUCTOR_STATUS_LABELS, LANGUAGES, LANGUAGE_LABELS } from "./labels";
+import type { Skill } from "@/lib/api/skills";
+import { EMPLOYMENT_TYPE_LABELS, INSTRUCTOR_STATUS_LABELS, LANGUAGES, LANGUAGE_LABELS } from "@/lib/labels";
 import type { LocationOption } from "./options";
 
 const LANGUAGE_OPTIONS: UrlSelectOption[] = LANGUAGES.map((value) => ({ value, label: LANGUAGE_LABELS[value] }));
@@ -17,7 +17,7 @@ const STATUS_OPTIONS: UrlSelectOption[] = Object.entries(INSTRUCTOR_STATUS_LABEL
 }));
 
 type FiltersBarProps = {
-  skills: SkillRef[];
+  skills: Skill[];
   locations: LocationOption[];
 };
 

@@ -11,7 +11,7 @@ import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessa
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { CertificateTypeRef } from "@/lib/api/certificate-types-ref";
+import type { CertificateType } from "@/lib/api/certificate-types";
 import {
   createCertificate,
   updateCertificate,
@@ -77,7 +77,7 @@ type CertificateDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   instructorId: string;
-  types: CertificateTypeRef[];
+  types: CertificateType[];
   /** Present for «Zertifikat bearbeiten», absent for «Zertifikat erfassen». */
   certificate?: InstructorCertificate;
 };

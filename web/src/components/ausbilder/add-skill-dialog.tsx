@@ -10,7 +10,7 @@ import { CheckboxList } from "@/components/data/checkbox-list";
 import { FormDialog, applyApiErrors } from "@/components/form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { replaceInstructorSkills } from "@/lib/api/instructors";
-import type { SkillRef } from "@/lib/api/skills-ref";
+import type { Skill } from "@/lib/api/skills";
 
 const schema = z.object({
   skillIds: z.array(z.string()).min(1, "Mindestens einen Skill wählen."),
@@ -25,7 +25,7 @@ type AddSkillDialogProps = {
   /** Skills the Ausbilder already holds; the PUT sends their union with the picked ones. */
   heldIds: string[];
   /** Active skills not yet held. */
-  options: SkillRef[];
+  options: Skill[];
 };
 
 /** «Skill hinzufügen»: checkbox list of the skills still available. */

@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import type { CourseKind } from "@/lib/api/course-types";
 import { TRACK_LABELS, type Track } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { COURSE_KIND_LABELS } from "./labels";
+import { COURSE_KIND_LABELS } from "@/lib/labels";
 
 const KIND_CLASS: Record<CourseKind, string> = {
   uk: "border-transparent bg-accent-soft text-accent",

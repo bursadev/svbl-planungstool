@@ -2,7 +2,7 @@ import { apiFetch } from "./client";
 import type { ApiFetcher } from "./request";
 
 /** Minimal Kurstyp for pickers; the full type lives in `lib/api/course-types.ts`. */
-export type CourseTypeRef = { id: string; code: string; name: string };
+export type MaintenanceCourseType = { id: string; code: string; name: string };
 
 /** `GET /certificate-types`: sorted by code, with the Kurstypen that count as Qualifikationspflege. */
 export type CertificateType = {
@@ -15,7 +15,7 @@ export type CertificateType = {
   warningLeadDays: number;
   /** Required maintenance courses per year; `null` = keine Pflege. */
   maintenanceMinPerYear: number | null;
-  maintenanceCourseTypes: CourseTypeRef[];
+  maintenanceCourseTypes: MaintenanceCourseType[];
 };
 
 export type CreateCertificateType = {
@@ -65,7 +65,3 @@ export function replaceMaintenanceCourseTypes(
   });
 }
 
-/** Kurstypen for the Pflichtkurse picker; only id, code and name are read from `GET /course-types`. */
-export function listCourseTypeRefs(fetcher: ApiFetcher = apiFetch): Promise<CourseTypeRef[]> {
-  return fetcher<CourseTypeRef[]>("/course-types");
-}

@@ -70,15 +70,3 @@ export function getApprentice(id: string, fetcher: ApiFetcher = apiFetch): Promi
   return fetcher<Apprentice>(`/apprentices/${encodeURIComponent(id)}`);
 }
 
-/** Jahrgang as the Lernende filters need it; the Bildungsplan slice owns the full shape. */
-export type CohortOption = {
-  id: string;
-  label: string;
-  track: Track;
-  startYear: number;
-};
-
-/** `GET /cohorts`, newest start year first. */
-export function listCohortOptions(fetcher: ApiFetcher = apiFetch): Promise<CohortOption[]> {
-  return fetcher<CohortOption[]>("/cohorts");
-}

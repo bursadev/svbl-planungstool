@@ -13,7 +13,7 @@ import { deleteCohort, type Cohort } from "@/lib/api/curriculum";
 import type { Track } from "@/lib/format";
 import { CohortDialog } from "./cohort-dialog";
 import { TrackBadge } from "./course-badges";
-import { SectionHeader } from "./section-header";
+import { SectionHeader } from "@/components/data/section-header";
 
 const COLUMNS = 5;
 

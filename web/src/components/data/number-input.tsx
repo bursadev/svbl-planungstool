@@ -8,20 +8,26 @@ type NumberInputProps = Omit<ComponentProps<typeof Input>, "type" | "value" | "o
   /** `null` for an empty field. */
   value: number | null;
   onChange: (value: number | null) => void;
+  /** An empty field becomes `null` (optional numbers) instead of `NaN`, which lets a `z.number()` schema report its own message. */
+  nullable?: boolean;
 };
 
 /**
- * `<Input type="number">` for a `number | null` form field: empty text becomes `null`, everything
- * else `valueAsNumber`. Spread the rest of a react-hook-form `field` onto it (`name`, `ref`, `onBlur`).
+ * `<Input type="number">` for react-hook-form number fields: everything typed becomes
+ * `valueAsNumber`; a cleared field becomes `NaN`, or `null` when `nullable`. Integers by default;
+ * pass `step` / `inputMode` for decimals. Spread the rest of `field` (name, ref, onBlur) onto it.
  */
-export function NumberInput({ value, onChange, className, ...props }: NumberInputProps) {
+export function NumberInput({ value, onChange, nullable = false, className, ...props }: NumberInputProps) {
   return (
     <Input
       type="number"
-      inputMode="decimal"
+      step={1}
+      inputMode="numeric"
       {...props}
       value={value === null || Number.isNaN(value) ? "" : value}
-      onChange={(event) => onChange(event.target.value === "" ? null : event.target.valueAsNumber)}
+      onChange={(event) =>
+        onChange(event.target.value === "" ? (nullable ? null : Number.NaN) : event.target.valueAsNumber)
+      }
       className={cn("font-mono tabular-nums", className)}
     />
   );

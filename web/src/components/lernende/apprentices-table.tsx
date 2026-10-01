@@ -5,7 +5,8 @@ import { StatusDot } from "@/components/data/status-dot";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import type { ApprenticeRow } from "@/lib/api/apprentices";
 import { TRACK_LABELS, formatDate } from "@/lib/format";
-import { APPRENTICE_STATUS_LABELS, APPRENTICE_STATUS_TONES } from "./labels";
+import { APPRENTICE_STATUS_LABELS } from "@/lib/labels";
+import { APPRENTICE_STATUS_TONES } from "./labels";
 
 const COLUMNS = 8;
 

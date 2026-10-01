@@ -1,28 +1,5 @@
 import type { SchoolClassDay } from "@/lib/api/vocational-schools";
-
-/** ISO weekdays in the order the Schultage dialog lists them. */
-export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
-export type Weekday = (typeof WEEKDAYS)[number];
-
-export const WEEKDAY_LABELS: Record<Weekday, string> = {
-  1: "Montag",
-  2: "Dienstag",
-  3: "Mittwoch",
-  4: "Donnerstag",
-  5: "Freitag",
-  6: "Samstag",
-  7: "Sonntag",
-};
-
-export const WEEKDAY_SHORT_LABELS: Record<Weekday, string> = {
-  1: "Mo",
-  2: "Di",
-  3: "Mi",
-  4: "Do",
-  5: "Fr",
-  6: "Sa",
-  7: "So",
-};
+import { WEEKDAY_SHORT_LABELS, type Weekday } from "@/lib/labels";
 
 /** `2026/27` for the school year that starts in August 2026. */
 export function formatSchoolYear(start: number): string {

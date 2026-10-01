@@ -3,7 +3,7 @@ import { ActiveBadge, DataTable, DataTableCell, DataTableEmpty, DataTableHead, L
 import { InitialsAvatar } from "@/components/data/initials-avatar";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import type { InstructorRow } from "@/lib/api/instructors";
-import { EMPLOYMENT_TYPE_LABELS, INSTRUCTOR_STATUS_LABELS } from "./labels";
+import { EMPLOYMENT_TYPE_LABELS, INSTRUCTOR_STATUS_LABELS } from "@/lib/labels";
 import { LanguageBadges } from "./language-badges";
 import { SkillChips } from "./skill-chip";
 

@@ -1,18 +1,19 @@
 "use client";
 
-import { useId, type ComponentProps } from "react";
+import { useId, type ComponentProps, type ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 export type CheckboxListOption = {
   value: string;
-  label: string;
-  /** Muted text after the label, e.g. a code. */
-  hint?: string;
+  label: ReactNode;
+  /** Muted text at the right edge, e.g. a code or «Semester 3». */
+  hint?: ReactNode;
 };
 
 type CheckboxListProps = Omit<ComponentProps<"div">, "onChange"> & {
   options: CheckboxListOption[];
+  /** Selected values; the callback keeps them in the order of `options`, so DTOs stay stable. */
   value: string[];
   onChange: (value: string[]) => void;
   /** `list`: bordered, scrollable column (pickers); `inline`: wrapping row (a few flags). */
@@ -37,13 +38,13 @@ export function CheckboxList({
   ...props
 }: CheckboxListProps) {
   const baseId = useId();
+  const selected = new Set(value);
 
   function toggle(option: string, checked: boolean) {
-    if (checked) {
-      if (!value.includes(option)) onChange([...value, option]);
-    } else {
-      onChange(value.filter((entry) => entry !== option));
-    }
+    const next = new Set(selected);
+    if (checked) next.add(option);
+    else next.delete(option);
+    onChange(options.map((o) => o.value).filter((v) => next.has(v)));
   }
 
   return (
@@ -62,25 +63,26 @@ export function CheckboxList({
       ) : (
         options.map((option) => {
           const id = `${baseId}-${option.value}`;
-          const checked = value.includes(option.value);
           return (
             <label
               key={option.value}
               htmlFor={id}
               className={cn(
                 "flex cursor-pointer items-center gap-2.5 text-sm select-none",
-                layout === "list" && "px-3 py-1.5 hover:bg-muted",
+                layout === "list" && "px-3 py-1.5 hover:bg-muted/60 has-[:focus-visible]:bg-muted/60",
                 disabled && "cursor-not-allowed opacity-60",
               )}
             >
               <Checkbox
                 id={id}
-                checked={checked}
+                checked={selected.has(option.value)}
                 disabled={disabled}
                 onCheckedChange={(next) => toggle(option.value, next === true)}
               />
-              <span className="min-w-0 truncate">{option.label}</span>
-              {option.hint ? <span className="font-mono text-xs text-muted-foreground">{option.hint}</span> : null}
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              {option.hint !== undefined ? (
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">{option.hint}</span>
+              ) : null}
             </label>
           );
         })

@@ -17,7 +17,8 @@ import {
 } from "@/lib/api/instructors";
 import { formatDate } from "@/lib/format";
 import { AvailabilityDialog } from "./availability-dialog";
-import { AVAILABILITY_KIND_LABELS, AVAILABILITY_STATUS_LABELS, AVAILABILITY_STATUS_TONES } from "./labels";
+import { AVAILABILITY_KIND_LABELS, AVAILABILITY_STATUS_LABELS } from "@/lib/labels";
+import { AVAILABILITY_STATUS_TONES } from "./labels";
 
 const COLUMNS = 6;
 

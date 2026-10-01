@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { Language } from "@/lib/format";
-import { LANGUAGES, LANGUAGE_LABELS, LANGUAGE_SHORT_LABELS } from "./labels";
+import { LANGUAGES, LANGUAGE_LABELS, LANGUAGE_SHORT_LABELS } from "@/lib/labels";
 
 /** «DE» «FR» «IT» badges in fixed order, each with the full language name as tooltip. */
 export function LanguageBadges({ languages }: { languages: Language[] }) {

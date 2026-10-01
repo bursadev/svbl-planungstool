@@ -1,5 +1,6 @@
 "use client";
 
+import type { CourseType } from "@/lib/api/course-types";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlusIcon } from "lucide-react";
@@ -8,7 +9,7 @@ import { DataTable, DataTableCell, DataTableEmpty, DataTableHead } from "@/compo
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteCertificateType, type CertificateType, type CourseTypeRef } from "@/lib/api/certificate-types";
+import { deleteCertificateType, type CertificateType } from "@/lib/api/certificate-types";
 import { ApiError } from "@/lib/api/client";
 import { CertificateTypeDialog } from "./certificate-type-dialog";
 
@@ -35,7 +36,7 @@ function formatMaintenance(type: CertificateType): string | null {
 type CertificateTypesPanelProps = {
   types: CertificateType[];
   /** Kurstypen for the dialog's picker; `null` when they could not be loaded. */
-  courseTypes: CourseTypeRef[] | null;
+  courseTypes: Pick<CourseType, "id" | "code" | "name">[] | null;
 };
 
 /** Tab «Zertifikatstypen»: table with per-row edit and delete, plus «Zertifikatstyp anlegen». */

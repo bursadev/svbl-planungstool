@@ -15,8 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { createCourseType, updateCourseType, type CourseType, type CreateCourseType } from "@/lib/api/course-types";
 import { LANGUAGE_LABELS, TRACK_LABELS, type Language } from "@/lib/format";
-import { COURSE_KIND_LABELS, WEEKDAY_RULE_LABELS } from "./labels";
-import { NumberInput } from "./number-input";
+import { COURSE_KIND_LABELS, WEEKDAY_RULE_LABELS } from "@/lib/labels";
+import { NumberInput } from "@/components/data/number-input";
 
 const integerMessage = "Ganze Zahl ab 1.";
 const LANGUAGES = Object.keys(LANGUAGE_LABELS) as Language[];

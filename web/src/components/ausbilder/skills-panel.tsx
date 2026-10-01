@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
 import { replaceInstructorSkills, type Instructor } from "@/lib/api/instructors";
-import type { SkillRef } from "@/lib/api/skills-ref";
+import type { Skill } from "@/lib/api/skills";
 import { AddSkillDialog } from "./add-skill-dialog";
 import { SkillChip } from "./skill-chip";
 
 type SkillsPanelProps = {
   instructor: Instructor;
   /** All skills; the picker offers the active ones the Ausbilder does not hold yet. */
-  allSkills: SkillRef[];
+  allSkills: Skill[];
 };
 
 /** Skill chips with ×, plus «Skill hinzufügen». Every change is one `PUT /instructors/:id/skills`. */

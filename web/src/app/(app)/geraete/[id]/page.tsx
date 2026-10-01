@@ -9,7 +9,7 @@ import { DeviceActions } from "@/components/geraete/device-actions";
 import { DEVICE_STATUS_TONES, toPickerOptions } from "@/components/geraete/labels";
 import { MaintenancePanel } from "@/components/geraete/maintenance-panel";
 import { MovesPanel } from "@/components/geraete/moves-panel";
-import { DEVICE_CATEGORY_LABELS } from "@/components/kataloge/labels";
+import { DEVICE_CATEGORY_LABELS } from "@/lib/labels";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { listDeviceTypes } from "@/lib/api/device-types";
