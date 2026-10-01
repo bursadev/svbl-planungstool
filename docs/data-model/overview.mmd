@@ -1,0 +1,163 @@
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: false
+    nodePlacementStrategy: BRANDES_KOEPF
+  themeVariables:
+    fontSize: 20px
+---
+flowchart LR
+
+  subgraph zugang["Zugang"]
+    user["Benutzer<br/><span style='font-size:13px'>user</span>"]
+  end
+
+  subgraph standorte["Standorte"]
+    location["Standort<br/><span style='font-size:13px'>location</span>"]
+    room["Raum<br/><span style='font-size:13px'>room</span>"]
+    location_distance["Reisezeit<br/><span style='font-size:13px'>location_distance</span>"]
+  end
+
+  subgraph geraete["Geräte"]
+    device_type["Gerätetyp<br/><span style='font-size:13px'>device_type</span>"]
+    device_type_qualification["Gerätequalifikation<br/><span style='font-size:13px'>device_type_qualification</span>"]
+    device["Gerät<br/><span style='font-size:13px'>device</span>"]
+    device_move["Geräteumzug<br/><span style='font-size:13px'>device_move</span>"]
+    maintenance_window["Wartungsfenster<br/><span style='font-size:13px'>maintenance_window</span>"]
+    device_reservation["Gerätereservation<br/><span style='font-size:13px'>device_reservation</span>"]
+  end
+
+  subgraph ausbilder["Ausbilder"]
+    skill["Skill<br/><span style='font-size:13px'>skill</span>"]
+    certificate_type["Zertifikatstyp<br/><span style='font-size:13px'>certificate_type</span>"]
+    certificate_type_maintenance_course_type["Qualifikationspflege<br/><span style='font-size:13px'>certificate_type_maintenance_course_type</span>"]
+    instructor["Ausbilder<br/><span style='font-size:13px'>instructor</span>"]
+    instructor_skill["Ausbilder-Skill<br/><span style='font-size:13px'>instructor_skill</span>"]
+    instructor_certificate["Zertifikat<br/><span style='font-size:13px'>instructor_certificate</span>"]
+    availability["Verfügbarkeit / Absenz<br/><span style='font-size:13px'>availability</span>"]
+  end
+
+  subgraph kurse["Kurse"]
+    course_type["Kurstyp<br/><span style='font-size:13px'>course_type</span>"]
+    course_type_skill["benötigte Skills<br/><span style='font-size:13px'>course_type_skill</span>"]
+    course_type_certificate["benötigte Zertifikate<br/><span style='font-size:13px'>course_type_certificate</span>"]
+    course_type_device["benötigte Geräte<br/><span style='font-size:13px'>course_type_device</span>"]
+    course["Kurs (Durchführung)<br/><span style='font-size:13px'>course</span>"]
+    course_day["Kurstag<br/><span style='font-size:13px'>course_day</span>"]
+    assignment["Einsatz<br/><span style='font-size:13px'>assignment</span>"]
+  end
+
+  subgraph bildungsplan["Bildungsplan"]
+    curriculum_module["ÜK-Modul<br/><span style='font-size:13px'>curriculum_module</span>"]
+    curriculum_module_prerequisite["Voraussetzung<br/><span style='font-size:13px'>curriculum_module_prerequisite</span>"]
+    cohort["Jahrgang<br/><span style='font-size:13px'>cohort</span>"]
+    time_window["Zeitfenster<br/><span style='font-size:13px'>time_window</span>"]
+  end
+
+  subgraph lernende["Lernende"]
+    vocational_school["Berufsschule<br/><span style='font-size:13px'>vocational_school</span>"]
+    school_holiday["Schulferien<br/><span style='font-size:13px'>school_holiday</span>"]
+    school_class["Schulklasse<br/><span style='font-size:13px'>school_class</span>"]
+    school_class_day["Schultag<br/><span style='font-size:13px'>school_class_day</span>"]
+    training_company["Lehrbetrieb<br/><span style='font-size:13px'>training_company</span>"]
+    trainer["Berufsbildner<br/><span style='font-size:13px'>trainer</span>"]
+    apprentice["Lernende/r<br/><span style='font-size:13px'>apprentice</span>"]
+    enrollment["Kursanmeldung<br/><span style='font-size:13px'>enrollment</span>"]
+    attendance["Anwesenheit<br/><span style='font-size:13px'>attendance</span>"]
+  end
+
+  subgraph kunden["Kunden"]
+    customer["Kunde<br/><span style='font-size:13px'>customer</span>"]
+    participant["Teilnehmer<br/><span style='font-size:13px'>participant</span>"]
+  end
+
+  subgraph planung["Planung"]
+    planning_run["Planungslauf<br/><span style='font-size:13px'>planning_run</span>"]
+    demand["Bedarf<br/><span style='font-size:13px'>demand</span>"]
+  end
+
+  subgraph system["System"]
+    alert["Hinweis<br/><span style='font-size:13px'>alert</span>"]
+    import_batch["Import<br/><span style='font-size:13px'>import_batch</span>"]
+    validation_issue["Prüfbefund<br/><span style='font-size:13px'>validation_issue</span>"]
+    audit_entry["Audit-Eintrag<br/><span style='font-size:13px'>audit_entry</span>"]
+    assistant_conversation["Assistent-Dialog<br/><span style='font-size:13px'>assistant_conversation</span>"]
+    setting["Einstellung<br/><span style='font-size:13px'>setting</span>"]
+  end
+
+  %% Zugang
+  user --> instructor
+  user --> trainer
+
+  %% Standorte
+  location --> room
+  location --> location_distance
+  location --> course
+  room --> course_day
+
+  %% Geräte
+  device_type --> device_type_qualification
+  device_type --> device
+  device --> device_move
+  device --> maintenance_window
+  device --> device_reservation
+  course_day --> device_reservation
+
+  %% Ausbilder
+  instructor --> instructor_skill
+  instructor --> instructor_certificate
+  instructor --> availability
+  skill --> instructor_skill
+  certificate_type --> instructor_certificate
+  certificate_type --> certificate_type_maintenance_course_type
+  instructor --> assignment
+
+  %% Kurse
+  course_type --> course_type_skill
+  course_type --> course_type_certificate
+  course_type --> course_type_device
+  course_type --> course
+  course --> course_day
+  course --> assignment
+
+  %% Bildungsplan
+  curriculum_module <--> course_type
+  curriculum_module --> curriculum_module_prerequisite
+  curriculum_module --> time_window
+  cohort --> time_window
+  time_window --> course
+  cohort --> apprentice
+
+  %% Lernende
+  vocational_school --> school_holiday
+  vocational_school --> school_class
+  school_class --> school_class_day
+  school_class --> apprentice
+  training_company --> trainer
+  trainer --> apprentice
+  apprentice --> enrollment
+  enrollment --> course
+  enrollment --> attendance
+
+  %% Kunden
+  customer --> participant
+  participant --> enrollment
+
+  %% Planung
+  planning_run --> demand
+  demand --> course
+
+  %% System
+  import_batch --> apprentice
+  import_batch --> validation_issue
+
+  %% invisible links that only steer the layout (no data meaning)
+  alert ~~~ audit_entry
+  assistant_conversation ~~~ setting
+  assignment ~~~ device_type
+  certificate_type ~~~ instructor
+  time_window ~~~ planning_run
+
+  classDef core fill:#6600FF,stroke:#6600FF,color:#FFFFFF
+  class course,course_day,assignment,enrollment,device_reservation,demand core

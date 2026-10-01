@@ -1,4 +1,5 @@
 import type { DataSourceOptions } from 'typeorm';
+import { SnakeNamingStrategy } from './snake-naming.strategy.js';
 
 type Env = Record<string, string | undefined>;
 
@@ -30,6 +31,9 @@ export function buildDataSourceOptions(
     ...connection,
     ssl: ssl ? { rejectUnauthorized: false } : false,
     logging: env.DB_LOGGING === 'true',
+    namingStrategy: new SnakeNamingStrategy(),
+    // gen_random_uuid() is built into PostgreSQL 13+, no uuid-ossp needed.
+    uuidExtension: 'pgcrypto',
     entities: [new URL('../**/*.entity.js', import.meta.url).pathname],
     migrations: [new URL('./migrations/*.js', import.meta.url).pathname],
     // Schema changes go through migrations only.

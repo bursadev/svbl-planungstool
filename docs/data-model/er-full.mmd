@@ -1,0 +1,85 @@
+erDiagram
+  USER |o--o| INSTRUCTOR : "logs in as"
+  USER |o--o| TRAINER : "logs in as"
+
+  CUSTOMER ||--o{ LOCATION : "has on-site"
+  LOCATION ||--o{ ROOM : has
+  LOCATION ||--o{ LOCATION_DISTANCE : "from / to"
+
+  DEVICE_TYPE ||--o{ DEVICE_TYPE_QUALIFICATION : requires
+  CERTIFICATE_TYPE |o--o{ DEVICE_TYPE_QUALIFICATION : qualifies
+  SKILL |o--o{ DEVICE_TYPE_QUALIFICATION : qualifies
+  DEVICE_TYPE ||--o{ DEVICE : classifies
+  LOCATION ||--o{ DEVICE : "home of"
+  DEVICE ||--o{ DEVICE_MOVE : "moved by"
+  DEVICE ||--o{ MAINTENANCE_WINDOW : "blocked by"
+  DEVICE ||--o{ DEVICE_RESERVATION : "reserved by"
+  COURSE_DAY ||--o{ DEVICE_RESERVATION : uses
+
+  LOCATION ||--o{ INSTRUCTOR : "home of"
+  INSTRUCTOR ||--o{ INSTRUCTOR_SKILL : holds
+  SKILL ||--o{ INSTRUCTOR_SKILL : "held as"
+  INSTRUCTOR ||--o{ INSTRUCTOR_CERTIFICATE : holds
+  CERTIFICATE_TYPE ||--o{ INSTRUCTOR_CERTIFICATE : "issued as"
+  INSTRUCTOR ||--o{ AVAILABILITY : has
+  CERTIFICATE_TYPE ||--o{ CERTIFICATE_TYPE_MAINTENANCE_COURSE_TYPE : "maintained by"
+  COURSE_TYPE ||--o{ CERTIFICATE_TYPE_MAINTENANCE_COURSE_TYPE : maintains
+
+  COURSE_TYPE ||--o{ COURSE_TYPE_SKILL : requires
+  SKILL ||--o{ COURSE_TYPE_SKILL : "required as"
+  COURSE_TYPE ||--o{ COURSE_TYPE_CERTIFICATE : requires
+  CERTIFICATE_TYPE ||--o{ COURSE_TYPE_CERTIFICATE : "required as"
+  COURSE_TYPE ||--o{ COURSE_TYPE_DEVICE : requires
+  DEVICE_TYPE ||--o{ COURSE_TYPE_DEVICE : "required as"
+
+  COURSE_TYPE ||--o| CURRICULUM_MODULE : "taught as"
+  CURRICULUM_MODULE ||--o{ CURRICULUM_MODULE_PREREQUISITE : "depends on"
+  CURRICULUM_MODULE ||--o{ TIME_WINDOW : "scheduled in"
+  COHORT ||--o{ TIME_WINDOW : has
+  LOCATION |o--o{ TIME_WINDOW : "specific to"
+
+  COURSE_TYPE ||--o{ COURSE : instantiates
+  LOCATION ||--o{ COURSE : hosts
+  COHORT |o--o{ COURSE : "served by"
+  TIME_WINDOW |o--o{ COURSE : contains
+  DEMAND |o--o{ COURSE : "fulfilled by"
+  PLANNING_RUN |o--o{ COURSE : proposes
+  COURSE ||--|{ COURSE_DAY : "consists of"
+  ROOM |o--o{ COURSE_DAY : "booked for"
+  COURSE ||--o{ ASSIGNMENT : "staffed by"
+  INSTRUCTOR ||--o{ ASSIGNMENT : takes
+  COURSE_DAY |o--o{ ASSIGNMENT : "restricted to"
+
+  VOCATIONAL_SCHOOL }o--|| LOCATION : "nearest is"
+  VOCATIONAL_SCHOOL ||--o{ SCHOOL_HOLIDAY : has
+  VOCATIONAL_SCHOOL ||--o{ SCHOOL_CLASS : has
+  SCHOOL_CLASS ||--o{ SCHOOL_CLASS_DAY : "meets on"
+  TRAINING_COMPANY ||--o{ TRAINER : employs
+  TRAINING_COMPANY |o--o{ APPRENTICE : employs
+  TRAINER |o--o{ APPRENTICE : "responsible for"
+  VOCATIONAL_SCHOOL ||--o{ APPRENTICE : sends
+  SCHOOL_CLASS |o--o{ APPRENTICE : groups
+  COHORT ||--o{ APPRENTICE : groups
+  IMPORT_BATCH |o--o{ APPRENTICE : sourced
+  CUSTOMER |o--o{ PARTICIPANT : sends
+
+  COURSE ||--o{ ENROLLMENT : has
+  APPRENTICE |o--o{ ENROLLMENT : attends
+  PARTICIPANT |o--o{ ENROLLMENT : attends
+  ENROLLMENT |o--o| ENROLLMENT : "follow-up of"
+  ENROLLMENT ||--o{ ATTENDANCE : "marked per day"
+  COURSE_DAY ||--o{ ATTENDANCE : "marked on"
+
+  PLANNING_RUN ||--o{ DEMAND : sizes
+  COHORT |o--o{ DEMAND : for
+  CURRICULUM_MODULE |o--o{ DEMAND : for
+  COURSE_TYPE ||--o{ DEMAND : for
+  TIME_WINDOW |o--o{ DEMAND : within
+  LOCATION ||--o{ DEMAND : at
+
+  IMPORT_BATCH ||--o{ VALIDATION_ISSUE : raised
+  VOCATIONAL_SCHOOL |o--o{ IMPORT_BATCH : "source of"
+  USER |o--o{ ALERT : acknowledges
+  USER |o--o{ AUDIT_ENTRY : actor
+  USER ||--o{ ASSISTANT_CONVERSATION : has
+  USER |o--o{ SETTING : updates

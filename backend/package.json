@@ -26,6 +26,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
+    "seed": "pnpm build && node dist/database/seed.js",
     "migration:generate": "pnpm build && typeorm -d dist/database/data-source.js migration:generate",
     "migration:create": "typeorm migration:create",
     "migration:run": "pnpm build && typeorm -d dist/database/data-source.js migration:run",
