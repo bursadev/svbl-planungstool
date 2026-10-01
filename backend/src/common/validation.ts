@@ -19,6 +19,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   isEnum: 'Ungültiger Wert.',
   isUuid: 'Ungültige Referenz.',
   isDateString: 'Ungültiges Datum.',
+  isDateOnly: 'Ungültiges Datum.',
   isInt: 'Ganze Zahl erwartet.',
   isNumber: 'Zahl erwartet.',
   isBoolean: 'Ja oder Nein erwartet.',
