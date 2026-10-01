@@ -542,10 +542,14 @@ function assertPeriod(startsOn: string, endsOn: string): void {
 }
 
 /** `issuedOn` plus the type's validity; null when the type does not expire. */
-function addYears(issuedOn: string, years: number | null): string | null {
+export function addYears(
+  issuedOn: string,
+  years: number | null,
+): string | null {
   if (years === null) return null;
   const [y, m, d] = issuedOn.split('-').map(Number);
-  return `${String(y + years).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  // Date.UTC normalises 29 February in a non-leap year to 1 March.
+  return new Date(Date.UTC(y + years, m - 1, d)).toISOString().slice(0, 10);
 }
 
 /** Status for today from `validUntil` and the type's warning lead time. */
