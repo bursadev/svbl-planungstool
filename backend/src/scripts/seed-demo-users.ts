@@ -57,10 +57,12 @@ async function main(): Promise<void> {
       emailAddress: [demo.email],
     });
     const existing = data[0];
+    // Demo accounts may use a simple password; skip the strength/breach check.
     const fields = {
       firstName: demo.firstName,
       lastName: demo.lastName,
       password,
+      skipPasswordChecks: true,
     };
     let user;
     if (existing) {
@@ -85,6 +87,13 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : err);
+  // Clerk's API errors carry the real reason in `errors`, not in `message`.
+  const details =
+    err !== null && typeof err === 'object' && 'errors' in err
+      ? (err.errors as { longMessage?: string; message: string }[])
+          .map((e) => e.longMessage ?? e.message)
+          .join('; ')
+      : null;
+  console.error(details ?? (err instanceof Error ? err.message : err));
   process.exitCode = 1;
 });
