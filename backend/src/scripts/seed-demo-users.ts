@@ -7,9 +7,11 @@ import { UserRole } from '../database/enums.js';
  * and one instructor, so both views of the web app can be shown. Re-running
  * is safe: existing accounts get name, role and password updated.
  *
- * The `+clerk_test` addresses are Clerk test e-mails: nothing is ever sent to
- * them and every verification code is `424242`, so new-device verification
- * can't block a demo. The password comes from DEMO_USER_PASSWORD in `.env`.
+ * Accounts created through the Backend API have their e-mail marked as
+ * verified, so sign-in only needs the password from DEMO_USER_PASSWORD in
+ * `.env`. Nobody reads these mailboxes: switch off Clerk's new-device check
+ * («Client trust» under Attack protection) in the dashboard, or a demo sign-in
+ * from a new browser waits for a code that never arrives.
  *
  *   pnpm seed:users
  */
@@ -22,14 +24,14 @@ interface DemoUser {
 
 const DEMO_USERS: DemoUser[] = [
   {
-    email: 'planung+clerk_test@svbl.ch',
+    email: 'planung@svbl.ch',
     firstName: 'Claudia',
     lastName: 'Meier',
     role: UserRole.Planner,
   },
   {
-    // Same person as the seeded instructor, so "Mein Bereich" can be linked later.
-    email: 'roger.federer+clerk_test@svbl.ch',
+    // Same name as a seeded instructor, so "Mein Bereich" can be linked later.
+    email: 'ausbildner@svbl.ch',
     firstName: 'Roger',
     lastName: 'Federer',
     role: UserRole.Instructor,
@@ -73,8 +75,11 @@ async function main(): Promise<void> {
         ...fields,
       });
     }
+    const verified = user.emailAddresses.find(
+      (e) => e.emailAddress === demo.email,
+    )?.verification?.status;
     console.log(
-      `${existing ? 'updated' : 'created'} ${demo.email} (${demo.role}) → ${user.id}`,
+      `${existing ? 'updated' : 'created'} ${demo.email} (${demo.role}, e-mail ${verified ?? 'unverified'}) → ${user.id}`,
     );
   }
 }

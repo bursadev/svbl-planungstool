@@ -42,7 +42,7 @@ Authentication uses [Clerk](https://clerk.com). The web app sends the Clerk sess
 
 Roles live in Clerk as `publicMetadata.role` (`planner`, `sales`, `management`, `instructor`, `trainer`, `admin`). Put it into the session token once in the Clerk dashboard (Sessions → Customize session token): `{ "role": "{{user.public_metadata.role}}", "email": "{{user.primary_email_address}}", "name": "{{user.full_name}}" }`; without the claims the guard fetches the user from Clerk's API and caches it for 10 minutes. Every signed-in role may read; `planner` and `admin` may write (`@Roles()`). In development, `AUTH_DEFAULT_ROLE` gives accounts without a role in Clerk a role; it is ignored when `NODE_ENV=production`. The signed-in user is mirrored into the `user` table on first request.
 
-Two demo accounts for the development instance are created with `pnpm seed:users` (`src/scripts/seed-demo-users.ts`): `planung+clerk_test@svbl.ch` (planner) and `roger.federer+clerk_test@svbl.ch` (instructor). The password is `DEMO_USER_PASSWORD` from `.env`; change it there and re-run to rotate. The `+clerk_test` addresses are Clerk test e-mails: no mail is sent and every verification code is `424242`.
+Two demo accounts for the development instance are created with `pnpm seed:users` (`src/scripts/seed-demo-users.ts`): `planung@svbl.ch` (planner) and `ausbildner@svbl.ch` (instructor), both with a verified e-mail. The password is `DEMO_USER_PASSWORD` from `.env`; change it there and re-run to rotate. Nobody reads those mailboxes, so switch off Clerk's new-device check (Configure → Attack protection → Client trust) in the dashboard; otherwise a sign-in from a new browser waits for a code that never arrives.
 
 ## Deploying to Heroku
 
