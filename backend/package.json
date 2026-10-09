@@ -27,6 +27,7 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "seed": "pnpm build && node dist/database/seed.js",
+    "seed:users": "pnpm build && node dist/scripts/seed-demo-users.js",
     "migration:generate": "pnpm build && typeorm -d dist/database/data-source.js migration:generate",
     "migration:create": "typeorm migration:create",
     "migration:run": "pnpm build && typeorm -d dist/database/data-source.js migration:run",
