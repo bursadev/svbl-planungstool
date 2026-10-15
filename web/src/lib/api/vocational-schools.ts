@@ -146,3 +146,51 @@ export function replaceSchoolClassDays(
 ): Promise<SchoolClass> {
   return fetcher<SchoolClass>(`/school-classes/${encodeURIComponent(id)}/days`, { method: "PUT", body: dto });
 }
+
+/** Schulferien: a holiday period of one school; no school days fall inside it. */
+export type SchoolHoliday = {
+  id: string;
+  vocationalSchoolId: string;
+  /** `YYYY-MM-DD`. */
+  startsOn: string;
+  /** `YYYY-MM-DD`. */
+  endsOn: string;
+  name: string | null;
+};
+
+export type CreateSchoolHoliday = {
+  startsOn: string;
+  endsOn: string;
+  name?: string | null;
+};
+
+export type UpdateSchoolHoliday = Partial<CreateSchoolHoliday>;
+
+/** Holidays of one school, sorted by start date. */
+export function listSchoolHolidays(schoolId: string, fetcher: ApiFetcher = apiFetch): Promise<SchoolHoliday[]> {
+  return fetcher<SchoolHoliday[]>(`/vocational-schools/${encodeURIComponent(schoolId)}/holidays`);
+}
+
+/** 400 when the start lies after the end. */
+export function createSchoolHoliday(
+  schoolId: string,
+  dto: CreateSchoolHoliday,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<SchoolHoliday> {
+  return fetcher<SchoolHoliday>(`/vocational-schools/${encodeURIComponent(schoolId)}/holidays`, {
+    method: "POST",
+    body: dto,
+  });
+}
+
+export function updateSchoolHoliday(
+  id: string,
+  dto: UpdateSchoolHoliday,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<SchoolHoliday> {
+  return fetcher<SchoolHoliday>(`/school-holidays/${encodeURIComponent(id)}`, { method: "PATCH", body: dto });
+}
+
+export function deleteSchoolHoliday(id: string, fetcher: ApiFetcher = apiFetch): Promise<void> {
+  return fetcher<void>(`/school-holidays/${encodeURIComponent(id)}`, { method: "DELETE" });
+}

@@ -108,3 +108,41 @@ export function updateRoom(id: string, dto: UpdateRoom, fetcher: ApiFetcher = ap
 export function deleteRoom(id: string, fetcher: ApiFetcher = apiFetch): Promise<void> {
   return fetcher<void>(`/rooms/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+/** Travel time between two Standorte; stored in both directions (symmetric). */
+export type LocationDistance = {
+  fromLocation: { id: string; code: string; name: string };
+  toLocation: { id: string; code: string; name: string };
+  travelMinutes: number;
+};
+
+export type UpsertLocationDistance = {
+  fromLocationId: string;
+  toLocationId: string;
+  travelMinutes: number;
+};
+
+/** Every stored pair, both directions, ordered by the location names. */
+export function listLocationDistances(fetcher: ApiFetcher = apiFetch): Promise<LocationDistance[]> {
+  return fetcher<LocationDistance[]>("/location-distances");
+}
+
+/** Creates or overwrites the pair in both directions. */
+export function setLocationDistance(
+  dto: UpsertLocationDistance,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<LocationDistance> {
+  return fetcher<LocationDistance>("/location-distances", { method: "PUT", body: dto });
+}
+
+/** Removes the pair in both directions. */
+export function deleteLocationDistance(
+  fromLocationId: string,
+  toLocationId: string,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<void> {
+  return fetcher<void>(
+    `/location-distances/${encodeURIComponent(fromLocationId)}/${encodeURIComponent(toLocationId)}`,
+    { method: "DELETE" },
+  );
+}

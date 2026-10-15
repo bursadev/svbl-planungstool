@@ -22,11 +22,11 @@ export default async function BerufsschulenPage() {
       <div className="flex flex-col gap-1">
         <PageHeader title="Berufsschulen" actions={<CreateSchoolButton locations={locationOptions} />} />
         <p className="text-sm text-muted-foreground">
-          Die Schul-Exporte sind die Quelle für die Lernenden; hier werden Standort-Zuordnung, Klassen und
-          Schultage gepflegt.
+          Die Schul-Exporte sind die Quelle für die Lernenden; hier werden Standort-Zuordnung, Klassen,
+          Schultage und Ferien gepflegt.
         </p>
       </div>
-      <SchoolsTable schools={schools} locations={locationOptions} />
+      <SchoolsTable schools={schools} />
     </>
   );
 }

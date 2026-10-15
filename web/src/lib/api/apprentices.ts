@@ -51,6 +51,7 @@ export type ApprenticeFilters = {
   q?: string;
   vocationalSchoolId?: string;
   cohortId?: string;
+  trainingCompanyId?: string;
   track?: Track;
 };
 

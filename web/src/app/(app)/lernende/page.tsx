@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SearchInput } from "@/components/data/search-input";
 import { UrlSelect } from "@/components/data/url-select";
 import { ApprenticesTable } from "@/components/lernende/apprentices-table";
+import { LernendeTabs } from "@/components/lernende/lernende-tabs";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { listApprentices } from "@/lib/api/apprentices";
@@ -51,6 +52,7 @@ export default async function LernendePage({ searchParams }: LernendePageProps) 
   return (
     <>
       <PageHeader title="Lernende" />
+      <LernendeTabs />
       <Card size="sm">
         <CardContent className="text-muted-foreground">
           Lernende werden nicht im Tool bearbeitet. Der Export der Berufsschule ist die Quelle. Import: kommt mit
