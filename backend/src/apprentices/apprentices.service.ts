@@ -78,6 +78,11 @@ export class ApprenticesService {
     }
     if (query.cohortId)
       qb.andWhere('a.cohortId = :cohortId', { cohortId: query.cohortId });
+    if (query.trainingCompanyId) {
+      qb.andWhere('a.trainingCompanyId = :trainingCompanyId', {
+        trainingCompanyId: query.trainingCompanyId,
+      });
+    }
     if (query.track) qb.andWhere('a.track = :track', { track: query.track });
     return (await qb.getMany()).map(toRow);
   }

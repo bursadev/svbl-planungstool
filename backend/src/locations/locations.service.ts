@@ -1,15 +1,27 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
+import type { UpsertLocationDistanceDto } from './dto/location-distance.dto.js';
 import type {
   CreateLocationDto,
   UpdateLocationDto,
 } from './dto/location.dto.js';
 import type { CreateRoomDto, UpdateRoomDto } from './dto/room.dto.js';
+import { LocationDistance } from './location-distance.entity.js';
 import { Location } from './location.entity.js';
 import { Room } from './room.entity.js';
+
+export interface LocationDistanceView {
+  fromLocation: Pick<Location, 'id' | 'code' | 'name'>;
+  toLocation: Pick<Location, 'id' | 'code' | 'name'>;
+  travelMinutes: number;
+}
 
 @Injectable()
 export class LocationsService {
@@ -17,6 +29,8 @@ export class LocationsService {
     @InjectRepository(Location)
     private readonly locations: Repository<Location>,
     @InjectRepository(Room) private readonly rooms: Repository<Room>,
+    @InjectRepository(LocationDistance)
+    private readonly distances: Repository<LocationDistance>,
     private readonly audit: AuditService,
   ) {}
 
@@ -157,4 +171,108 @@ export class LocationsService {
     if (!room) throw new NotFoundException('Raum nicht gefunden.');
     return room;
   }
+
+  // --- Distances ------------------------------------------------------------
+
+  /** Every stored pair, both directions, ordered by the location names. */
+  async listDistances(): Promise<LocationDistanceView[]> {
+    const distances = await this.distances.find({
+      relations: { fromLocation: true, toLocation: true },
+    });
+    return distances
+      .map(toDistanceView)
+      .sort(
+        (a, b) =>
+          a.fromLocation.name.localeCompare(b.fromLocation.name) ||
+          a.toLocation.name.localeCompare(b.toLocation.name),
+      );
+  }
+
+  /** Upserts the pair in both directions: travel times are kept symmetric. */
+  async setDistance(
+    dto: UpsertLocationDistanceDto,
+    actor: AuthUser,
+  ): Promise<LocationDistanceView> {
+    const { fromLocationId, toLocationId, travelMinutes } = dto;
+    if (fromLocationId === toLocationId) {
+      throw new BadRequestException('Start und Ziel müssen verschieden sein.');
+    }
+    const locations = await this.locations.findBy({
+      id: In([fromLocationId, toLocationId]),
+    });
+    if (locations.length !== 2) {
+      throw new BadRequestException('Unbekannter Standort.');
+    }
+    await this.distances.upsert(
+      [
+        { fromLocationId, toLocationId, travelMinutes },
+        {
+          fromLocationId: toLocationId,
+          toLocationId: fromLocationId,
+          travelMinutes,
+        },
+      ],
+      { conflictPaths: ['fromLocationId', 'toLocationId'] },
+    );
+    const names = new Map(locations.map((l) => [l.id, l.name]));
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'location_distance',
+      entityId: fromLocationId,
+      action: 'set',
+      after: { fromLocationId, toLocationId, travelMinutes },
+      summary: `hat die Reisezeit ${names.get(fromLocationId)} – ${names.get(toLocationId)} auf ${travelMinutes} Minuten gesetzt`,
+    });
+    const stored = await this.distances.findOneOrFail({
+      where: { fromLocationId, toLocationId },
+      relations: { fromLocation: true, toLocation: true },
+    });
+    return toDistanceView(stored);
+  }
+
+  /** Removes the pair in both directions. */
+  async removeDistance(
+    fromLocationId: string,
+    toLocationId: string,
+    actor: AuthUser,
+  ): Promise<void> {
+    const existing = await this.distances.findOne({
+      where: { fromLocationId, toLocationId },
+      relations: { fromLocation: true, toLocation: true },
+    });
+    if (!existing) throw new NotFoundException('Reisezeit nicht gefunden.');
+    await this.distances.delete({ fromLocationId, toLocationId });
+    await this.distances.delete({
+      fromLocationId: toLocationId,
+      toLocationId: fromLocationId,
+    });
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'location_distance',
+      entityId: fromLocationId,
+      action: 'delete',
+      before: {
+        fromLocationId,
+        toLocationId,
+        travelMinutes: existing.travelMinutes,
+      },
+      summary: `hat die Reisezeit ${existing.fromLocation.name} – ${existing.toLocation.name} gelöscht`,
+    });
+  }
+}
+
+function toDistanceView(distance: LocationDistance): LocationDistanceView {
+  return {
+    fromLocation: {
+      id: distance.fromLocation.id,
+      code: distance.fromLocation.code,
+      name: distance.fromLocation.name,
+    },
+    toLocation: {
+      id: distance.toLocation.id,
+      code: distance.toLocation.code,
+      name: distance.toLocation.name,
+    },
+    travelMinutes: distance.travelMinutes,
+  };
 }

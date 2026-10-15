@@ -11,13 +11,16 @@ import { AuditService, snapshot } from '../system/audit.service.js';
 import { Apprentice } from './apprentice.entity.js';
 import type {
   CreateSchoolClassDto,
+  CreateSchoolHolidayDto,
   CreateVocationalSchoolDto,
   ReplaceSchoolClassDaysDto,
   UpdateSchoolClassDto,
+  UpdateSchoolHolidayDto,
   UpdateVocationalSchoolDto,
 } from './dto/school.dto.js';
 import { SchoolClassDay } from './school-class-day.entity.js';
 import { SchoolClass } from './school-class.entity.js';
+import { SchoolHoliday } from './school-holiday.entity.js';
 import { VocationalSchool } from './vocational-school.entity.js';
 
 export interface SchoolClassView {
@@ -60,6 +63,8 @@ export class SchoolsService {
     private readonly classes: Repository<SchoolClass>,
     @InjectRepository(SchoolClassDay)
     private readonly days: Repository<SchoolClassDay>,
+    @InjectRepository(SchoolHoliday)
+    private readonly holidays: Repository<SchoolHoliday>,
     @InjectRepository(Apprentice)
     private readonly apprentices: Repository<Apprentice>,
     @InjectRepository(Location)
@@ -258,6 +263,78 @@ export class SchoolsService {
     return this.getClass(id);
   }
 
+  // --- Holidays -----------------------------------------------------------
+
+  async listHolidays(schoolId: string): Promise<SchoolHoliday[]> {
+    await this.load(schoolId);
+    return this.holidays.find({
+      where: { vocationalSchoolId: schoolId },
+      order: { startsOn: 'ASC' },
+    });
+  }
+
+  async createHoliday(
+    schoolId: string,
+    dto: CreateSchoolHolidayDto,
+    actor: AuthUser,
+  ): Promise<SchoolHoliday> {
+    const school = await this.load(schoolId);
+    assertHolidayRange(dto.startsOn, dto.endsOn);
+    const holiday = this.holidays.create(dto);
+    holiday.vocationalSchoolId = schoolId;
+    await this.holidays.save(holiday);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'school_holiday',
+      entityId: holiday.id,
+      action: 'create',
+      after: snapshot(holiday),
+      summary: `hat Ferien ${holiday.startsOn} – ${holiday.endsOn} an ${school.name} angelegt`,
+    });
+    return holiday;
+  }
+
+  async updateHoliday(
+    id: string,
+    dto: UpdateSchoolHolidayDto,
+    actor: AuthUser,
+  ): Promise<SchoolHoliday> {
+    const holiday = await this.loadHoliday(id);
+    const before = snapshot(holiday);
+    this.holidays.merge(holiday, dto);
+    assertHolidayRange(holiday.startsOn, holiday.endsOn);
+    await this.holidays.save(holiday);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'school_holiday',
+      entityId: id,
+      action: 'update',
+      before,
+      after: snapshot(holiday),
+      summary: `hat Ferien ${holiday.startsOn} – ${holiday.endsOn} geändert`,
+    });
+    return holiday;
+  }
+
+  async removeHoliday(id: string, actor: AuthUser): Promise<void> {
+    const holiday = await this.loadHoliday(id);
+    await this.holidays.delete(id);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'school_holiday',
+      entityId: id,
+      action: 'delete',
+      before: snapshot(holiday),
+      summary: `hat Ferien ${holiday.startsOn} – ${holiday.endsOn} gelöscht`,
+    });
+  }
+
+  private async loadHoliday(id: string): Promise<SchoolHoliday> {
+    const holiday = await this.holidays.findOneBy({ id });
+    if (!holiday) throw new NotFoundException('Ferien nicht gefunden.');
+    return holiday;
+  }
+
   // --- Helpers ------------------------------------------------------------
 
   private async getClass(id: string): Promise<SchoolClassView> {
@@ -370,6 +447,12 @@ function toClassView(c: SchoolClass, apprenticeCount: number): SchoolClassView {
       })),
     apprenticeCount,
   };
+}
+
+function assertHolidayRange(startsOn: string, endsOn: string): void {
+  if (startsOn > endsOn) {
+    throw new BadRequestException('Das Startdatum liegt nach dem Enddatum.');
+  }
 }
 
 function dtoColumns(dto: UpdateSchoolClassDto): Partial<SchoolClass> {

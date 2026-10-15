@@ -18,9 +18,11 @@ import { ApprenticesService } from './apprentices.service.js';
 import { ListApprenticesQuery } from './dto/apprentice.dto.js';
 import {
   CreateSchoolClassDto,
+  CreateSchoolHolidayDto,
   CreateVocationalSchoolDto,
   ReplaceSchoolClassDaysDto,
   UpdateSchoolClassDto,
+  UpdateSchoolHolidayDto,
   UpdateVocationalSchoolDto,
 } from './dto/school.dto.js';
 import { SchoolsService } from './schools.service.js';
@@ -78,6 +80,43 @@ export class VocationalSchoolsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.schools.createClass(id, dto, user);
+  }
+
+  @Get(':id/holidays')
+  listHolidays(@Param('id', uuidPipe) id: string) {
+    return this.schools.listHolidays(id);
+  }
+
+  @Post(':id/holidays')
+  @Roles(...WRITE_ROLES)
+  createHoliday(
+    @Param('id', uuidPipe) id: string,
+    @Body() dto: CreateSchoolHolidayDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.schools.createHoliday(id, dto, user);
+  }
+}
+
+@Controller('school-holidays')
+export class SchoolHolidaysController {
+  constructor(private readonly schools: SchoolsService) {}
+
+  @Patch(':id')
+  @Roles(...WRITE_ROLES)
+  update(
+    @Param('id', uuidPipe) id: string,
+    @Body() dto: UpdateSchoolHolidayDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.schools.updateHoliday(id, dto, user);
+  }
+
+  @Delete(':id')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(204)
+  remove(@Param('id', uuidPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.schools.removeHoliday(id, user);
   }
 }
 

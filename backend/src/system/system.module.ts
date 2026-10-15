@@ -6,6 +6,8 @@ import { AuditEntry } from './audit-entry.entity.js';
 import { AuditService } from './audit.service.js';
 import { ImportBatch } from './import-batch.entity.js';
 import { Setting } from './setting.entity.js';
+import { SettingsController } from './settings.controller.js';
+import { SettingsService } from './settings.service.js';
 import { ValidationIssue } from './validation-issue.entity.js';
 
 @Module({
@@ -19,7 +21,8 @@ import { ValidationIssue } from './validation-issue.entity.js';
       Setting,
     ]),
   ],
-  providers: [AuditService],
+  controllers: [SettingsController],
+  providers: [AuditService, SettingsService],
   exports: [TypeOrmModule, AuditService],
 })
 export class SystemModule {}

@@ -6,6 +6,7 @@ import { Apprentice } from './apprentice.entity.js';
 import {
   ApprenticesController,
   SchoolClassesController,
+  SchoolHolidaysController,
   VocationalSchoolsController,
 } from './apprentices.controller.js';
 import { ApprenticesService } from './apprentices.service.js';
@@ -16,6 +17,11 @@ import { SchoolClass } from './school-class.entity.js';
 import { SchoolHoliday } from './school-holiday.entity.js';
 import { SchoolsService } from './schools.service.js';
 import { Trainer } from './trainer.entity.js';
+import {
+  TrainersController,
+  TrainingCompaniesController,
+} from './training-companies.controller.js';
+import { TrainingCompaniesService } from './training-companies.service.js';
 import { TrainingCompany } from './training-company.entity.js';
 import { VocationalSchool } from './vocational-school.entity.js';
 
@@ -39,9 +45,12 @@ import { VocationalSchool } from './vocational-school.entity.js';
   controllers: [
     VocationalSchoolsController,
     SchoolClassesController,
+    SchoolHolidaysController,
+    TrainingCompaniesController,
+    TrainersController,
     ApprenticesController,
   ],
-  providers: [SchoolsService, ApprenticesService],
+  providers: [SchoolsService, ApprenticesService, TrainingCompaniesService],
   exports: [TypeOrmModule, SchoolsService, ApprenticesService],
 })
 export class ApprenticesModule {}

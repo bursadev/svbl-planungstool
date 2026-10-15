@@ -14,6 +14,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { IsDateOnly } from '../../common/validators.js';
 import { Language, Track } from '../../database/enums.js';
 
 export class CreateVocationalSchoolDto {
@@ -112,3 +113,19 @@ export class ReplaceSchoolClassDaysDto {
   @Type(() => SchoolClassDayDto)
   days: SchoolClassDayDto[];
 }
+
+export class CreateSchoolHolidayDto {
+  @IsDateOnly()
+  startsOn: string;
+
+  @IsDateOnly()
+  endsOn: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string | null;
+}
+
+export class UpdateSchoolHolidayDto extends PartialType(
+  CreateSchoolHolidayDto,
+) {}

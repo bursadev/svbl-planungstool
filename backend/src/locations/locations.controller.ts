@@ -7,12 +7,14 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Roles, WRITE_ROLES } from '../auth/roles.decorator.js';
 import { uuidPipe } from '../common/uuid.pipe.js';
+import { UpsertLocationDistanceDto } from './dto/location-distance.dto.js';
 import { CreateLocationDto, UpdateLocationDto } from './dto/location.dto.js';
 import { CreateRoomDto, UpdateRoomDto } from './dto/room.dto.js';
 import { LocationsService } from './locations.service.js';
@@ -67,6 +69,33 @@ export class LocationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.locations.createRoom(id, dto, user);
+  }
+}
+
+@Controller('location-distances')
+export class LocationDistancesController {
+  constructor(private readonly locations: LocationsService) {}
+
+  @Get()
+  list() {
+    return this.locations.listDistances();
+  }
+
+  @Put()
+  @Roles(...WRITE_ROLES)
+  set(@Body() dto: UpsertLocationDistanceDto, @CurrentUser() user: AuthUser) {
+    return this.locations.setDistance(dto, user);
+  }
+
+  @Delete(':fromId/:toId')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(204)
+  remove(
+    @Param('fromId', uuidPipe) fromId: string,
+    @Param('toId', uuidPipe) toId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.locations.removeDistance(fromId, toId, user);
   }
 }
 

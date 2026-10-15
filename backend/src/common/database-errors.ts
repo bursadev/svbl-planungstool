@@ -52,6 +52,8 @@ function columnLabel(column: string): string {
     cohort_id: 'Der Jahrgang',
     location_id: 'Der Standort',
     weekday: 'Der Wochentag',
+    instructor_id: 'Der Ausbilder',
+    trainer_id: 'Der Berufsbildner',
   };
   return labels[column] ?? 'Der Wert';
 }

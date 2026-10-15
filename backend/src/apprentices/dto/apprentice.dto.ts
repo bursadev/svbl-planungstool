@@ -16,6 +16,10 @@ export class ListApprenticesQuery {
   cohortId?: string;
 
   @IsOptional()
+  @IsUUID()
+  trainingCompanyId?: string;
+
+  @IsOptional()
   @IsEnum(Track)
   track?: Track;
 }

@@ -1,8 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { UserRole } from '../database/enums.js';
+import { Trainer } from '../apprentices/trainer.entity.js';
+import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import { UserStatus, type UserRole } from '../database/enums.js';
+import { Instructor } from '../instructors/instructor.entity.js';
+import { AuditService, snapshot } from '../system/audit.service.js';
+import type { UpdateUserDto } from './dto/user.dto.js';
 import { User } from './user.entity.js';
+
+export interface UserView {
+  id: string;
+  email: string;
+  displayName: string;
+  role: User['role'];
+  locale: User['locale'];
+  status: User['status'];
+  lastLoginAt: Date | null;
+  instructor: { id: string; firstName: string; lastName: string } | null;
+  trainer: { id: string; firstName: string; lastName: string } | null;
+}
 
 /** What the auth layer knows about the signed-in person. */
 export interface UserProfile {
@@ -28,6 +50,11 @@ export class UsersService {
 
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(Instructor)
+    private readonly instructors: Repository<Instructor>,
+    @InjectRepository(Trainer)
+    private readonly trainers: Repository<Trainer>,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -55,6 +82,11 @@ export class UsersService {
     const user = await this.users.findOneByOrFail({
       clerkUserId: profile.userId,
     });
+    // Deactivated accounts stay signed in at Clerk but are shut out here;
+    // never cached, so re-activation takes effect on the next request.
+    if (user.status === UserStatus.Disabled) {
+      throw new ForbiddenException('Konto deaktiviert.');
+    }
 
     this.touched.set(profile.userId, { at: Date.now(), dbUserId: user.id });
     return user.id;
@@ -63,4 +95,76 @@ export class UsersService {
   findByClerkId(clerkUserId: string): Promise<User | null> {
     return this.users.findOne({ where: { clerkUserId } });
   }
+
+  async list(): Promise<UserView[]> {
+    const users = await this.users.find({
+      relations: { instructor: true, trainer: true },
+      order: { displayName: 'ASC' },
+    });
+    return users.map(toView);
+  }
+
+  async update(
+    id: string,
+    dto: UpdateUserDto,
+    actor: AuthUser,
+  ): Promise<UserView> {
+    // Loaded without relations: a loaded relation would win over a nulled
+    // link column when TypeORM persists the row.
+    const user = await this.users.findOneBy({ id });
+    if (!user) throw new NotFoundException('Benutzer nicht gefunden.');
+    if (dto.instructorId && !(await this.instructors.existsBy({ id: dto.instructorId }))) {
+      throw new BadRequestException('Unbekannter Ausbilder.');
+    }
+    if (dto.trainerId && !(await this.trainers.existsBy({ id: dto.trainerId }))) {
+      throw new BadRequestException('Unbekannter Berufsbildner.');
+    }
+    const before = snapshot(user);
+    if (dto.status !== undefined) user.status = dto.status;
+    if (dto.instructorId !== undefined) user.instructorId = dto.instructorId;
+    if (dto.trainerId !== undefined) user.trainerId = dto.trainerId;
+    await this.users.save(user);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'user',
+      entityId: id,
+      action: 'update',
+      before,
+      after: snapshot(user),
+      summary: `hat Benutzer «${user.displayName}» geändert`,
+    });
+    // The cached touch entry may now carry a stale status; drop it.
+    this.touched.delete(user.clerkUserId);
+    const fresh = await this.users.findOneOrFail({
+      where: { id },
+      relations: { instructor: true, trainer: true },
+    });
+    return toView(fresh);
+  }
+}
+
+function toView(user: User): UserView {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+    locale: user.locale,
+    status: user.status,
+    lastLoginAt: user.lastLoginAt,
+    instructor: user.instructor
+      ? {
+          id: user.instructor.id,
+          firstName: user.instructor.firstName,
+          lastName: user.instructor.lastName,
+        }
+      : null,
+    trainer: user.trainer
+      ? {
+          id: user.trainer.id,
+          firstName: user.trainer.firstName,
+          lastName: user.trainer.lastName,
+        }
+      : null,
+  };
 }

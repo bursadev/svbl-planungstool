@@ -4,6 +4,7 @@ import { SystemModule } from '../system/system.module.js';
 import { LocationDistance } from './location-distance.entity.js';
 import { Location } from './location.entity.js';
 import {
+  LocationDistancesController,
   LocationsController,
   RoomsController,
 } from './locations.controller.js';
@@ -15,7 +16,11 @@ import { Room } from './room.entity.js';
     TypeOrmModule.forFeature([Location, Room, LocationDistance]),
     SystemModule,
   ],
-  controllers: [LocationsController, RoomsController],
+  controllers: [
+    LocationsController,
+    LocationDistancesController,
+    RoomsController,
+  ],
   providers: [LocationsService],
   exports: [TypeOrmModule, LocationsService],
 })
