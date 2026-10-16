@@ -7,7 +7,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <Sidebar />
       <main className="min-w-0 flex-1">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 p-6">{children}</div>
+        <div className="flex w-full flex-col gap-5 p-6">{children}</div>
       </main>
     </div>
   );
