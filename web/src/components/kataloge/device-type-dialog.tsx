@@ -112,7 +112,10 @@ export function DeviceTypeDialog({ open, onOpenChange, type, certificateTypes, s
   }
 
   // Inactive catalogue entries stay selectable only while they are already assigned.
-  const certificateOptions = certificateTypes.map((c) => ({ value: c.id, label: c.name, hint: c.code }));
+  const assignedCertificates = new Set(type?.qualifications.certificateTypes.map((c) => c.id) ?? []);
+  const certificateOptions = certificateTypes
+    .filter((c) => c.active || assignedCertificates.has(c.id))
+    .map((c) => ({ value: c.id, label: c.name, hint: c.code }));
   const assignedSkills = new Set(type?.qualifications.skills.map((s) => s.id) ?? []);
   const skillOptions = skills
     .filter((s) => s.active || assignedSkills.has(s.id))

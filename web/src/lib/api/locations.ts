@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 import type { Language } from "../format";
 
 export type LocationKind = "training_centre" | "customer_site";
@@ -67,12 +68,39 @@ export type CreateRoom = {
 
 export type UpdateRoom = Partial<CreateRoom>;
 
+/** Filters of `GET /locations` and its CSV export; `q` matches code, name, address and contact. */
+export type LocationFilters = ListPageParams & {
+  q?: string;
+  kind?: LocationKind;
+  languageRegion?: Language;
+  hostsUk?: boolean;
+  canton?: string;
+};
+
+export const LOCATIONS_PATH = "/locations";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function locationQuery(filters: LocationFilters = {}): Record<string, string | number | undefined> {
+  const { hostsUk, ...rest } = filters;
+  return { ...rest, hostsUk: hostsUk === undefined ? undefined : String(hostsUk) };
+}
+
 /**
- * Standorte sorted by name; `q` matches code, name or city. Defaults to the browser client;
+ * Standorte sorted by name, all of them unless `page` is set. Defaults to the browser client;
  * Server Components pass `serverApiFetch` from `@/lib/api/server`.
  */
-export function listLocations(q?: string, fetcher: ApiFetcher = apiFetch): Promise<Location[]> {
-  return fetcher<Location[]>(withQuery("/locations", { q }));
+export function listLocations(filters: LocationFilters = {}, fetcher: ApiFetcher = apiFetch): Promise<Location[]> {
+  return fetcher<Location[]>(withQuery(LOCATIONS_PATH, locationQuery(filters)));
+}
+
+/** One page of Standorte with the total number of matches. */
+export function listLocationsPage(filters: LocationFilters, fetcher: ApiFetcher = apiFetch): Promise<Page<Location>> {
+  return fetchPage<Location>(withQuery(LOCATIONS_PATH, locationQuery(filters)), fetcher);
+}
+
+/** Cantons used by any Standort, upper case, for the filter. */
+export function listLocationCantons(fetcher: ApiFetcher = apiFetch): Promise<string[]> {
+  return fetcher<string[]>(`${LOCATIONS_PATH}/cantons`);
 }
 
 /** One Standort with its rooms; throws `ApiError` 404 when it does not exist. */

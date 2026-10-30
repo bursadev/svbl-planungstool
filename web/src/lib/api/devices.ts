@@ -2,6 +2,7 @@ import { apiFetch } from "./client";
 import type { DeviceCategory } from "./device-types";
 import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 
 export type DeviceMobility = "fixed" | "mobile" | "rental";
 export type DeviceStatus = "available" | "maintenance" | "retired";
@@ -22,6 +23,7 @@ export type DeviceRow = {
   rentalFrom: string | null;
   rentalUntil: string | null;
   rentalVendor: string | null;
+  notes: string | null;
   /** The move with the latest `effectiveOn`, including future ones. */
   lastMove?: { toLocation: LocationRef; effectiveOn: string } | null;
 };
@@ -49,12 +51,16 @@ export type MaintenanceWindow = {
 
 /** `GET /devices/:id`: the row plus notes, moves and maintenance windows. */
 export type DeviceDetail = DeviceRow & {
-  notes: string | null;
   moves: DeviceMove[];
   maintenanceWindows: MaintenanceWindow[];
 };
 
-export type DeviceFilters = {
+/**
+ * Filters of `GET /devices` and its CSV export. `q` matches inventory number, type, home location,
+ * vendor and notes; `archive` hides (`active`) or shows only (`archived`) retired devices.
+ */
+export type DeviceFilters = ListPageParams & {
+  q?: string;
   deviceTypeId?: string;
   /** Devices whose home location this is. */
   locationId?: string;
@@ -90,8 +96,19 @@ export type CreateMaintenanceWindow = {
 
 export type UpdateMaintenanceWindow = Partial<CreateMaintenanceWindow>;
 
+export const DEVICES_PATH = "/devices";
+
+/**
+ * Geräte sorted by inventory number, all of them unless `page` is set. Defaults to the browser
+ * client; Server Components pass `serverApiFetch` from `@/lib/api/server`.
+ */
 export function listDevices(filters: DeviceFilters = {}, fetcher: ApiFetcher = apiFetch): Promise<DeviceRow[]> {
-  return fetcher<DeviceRow[]>(withQuery("/devices", filters));
+  return fetcher<DeviceRow[]>(withQuery(DEVICES_PATH, filters));
+}
+
+/** One page of Geräte with the total number of matches. */
+export function listDevicesPage(filters: DeviceFilters, fetcher: ApiFetcher = apiFetch): Promise<Page<DeviceRow>> {
+  return fetchPage<DeviceRow>(withQuery(DEVICES_PATH, filters), fetcher);
 }
 
 /** Devices whose home location is the given Standort. */

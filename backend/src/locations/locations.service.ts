@@ -4,12 +4,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, In, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
 import type { UpsertLocationDistanceDto } from './dto/location-distance.dto.js';
 import type {
   CreateLocationDto,
+  ListLocationsQuery,
   UpdateLocationDto,
 } from './dto/location.dto.js';
 import type { CreateRoomDto, UpdateRoomDto } from './dto/room.dto.js';
@@ -34,20 +41,71 @@ export class LocationsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** All locations with their rooms; `q` matches code, name or city. */
-  list(q?: string): Promise<Location[]> {
-    const where = q
-      ? [
-          { name: ILike(`%${q}%`) },
-          { code: ILike(`%${q}%`) },
-          { city: ILike(`%${q}%`) },
-        ]
-      : undefined;
-    return this.locations.find({
-      where,
-      relations: { rooms: true },
-      order: { name: 'ASC', rooms: { name: 'ASC' } },
-    });
+  /**
+   * Locations with their rooms, filtered and (with `page`) paged; the total
+   * goes into `X-Total-Count`. `q` matches code, name, address, city, canton
+   * and contact, word by word and ignoring accents.
+   */
+  async list(query: ListLocationsQuery = {}): Promise<Page<Location>> {
+    const qb = this.locations
+      .createQueryBuilder('l')
+      .leftJoinAndSelect('l.rooms', 'room');
+    applySearch(
+      qb,
+      [
+        'l.code',
+        'l.name',
+        'l.addressLine',
+        'l.postalCode',
+        'l.city',
+        'l.canton',
+        'l.contactName',
+        'l.contactEmail',
+      ],
+      query.q,
+    );
+    applyArchive(qb, query.archive, 'l.active');
+    if (query.kind) qb.andWhere('l.kind = :kind', { kind: query.kind });
+    if (query.languageRegion) {
+      qb.andWhere('l.languageRegion = :languageRegion', {
+        languageRegion: query.languageRegion,
+      });
+    }
+    if (query.hostsUk) {
+      qb.andWhere('l.hostsUk = :hostsUk', {
+        hostsUk: query.hostsUk === 'true',
+      });
+    }
+    if (query.canton) {
+      qb.andWhere('upper(l.canton) = upper(:canton)', { canton: query.canton });
+    }
+    const page = await pageOf(
+      qb,
+      query,
+      {
+        name: 'l.name',
+        code: 'l.code',
+        city: 'l.city',
+        capacity: 'l.parallelCourseCapacity',
+      },
+      'name',
+      'l.id',
+    );
+    for (const location of page.items) {
+      location.rooms.sort((a, b) => a.name.localeCompare(b.name, 'de-CH'));
+    }
+    return page;
+  }
+
+  /** Distinct cantons of all locations, for the filter. */
+  async cantons(): Promise<string[]> {
+    const rows: { canton: string }[] = await this.locations
+      .createQueryBuilder('l')
+      .select('DISTINCT upper(l.canton)', 'canton')
+      .where("coalesce(l.canton, '') <> ''")
+      .orderBy('canton')
+      .getRawMany();
+    return rows.map((r) => r.canton);
   }
 
   async get(id: string): Promise<Location> {

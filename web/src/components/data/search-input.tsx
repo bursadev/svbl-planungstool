@@ -50,6 +50,7 @@ function SyncedSearchInput({ param = "q", placeholder = "Suchen…", delay = 300
     const timer = setTimeout(() => {
       setPushed(value);
       const next = new URLSearchParams(searchParams.toString());
+      next.delete("seite");
       if (value) next.set(param, value);
       else next.delete(param);
       const query = next.toString();

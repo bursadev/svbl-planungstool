@@ -5,6 +5,7 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -14,6 +15,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 import {
   EmploymentType,
   InstructorStatus,
@@ -106,8 +108,13 @@ export class ReplaceSkillsDto {
   skillIds: string[];
 }
 
-/** Filters of GET /instructors; all optional. */
-export class ListInstructorsQuery {
+/** Certificate state for today, as the detail page derives it from `validUntil` and the type's `warningLeadDays`. */
+export const CERTIFICATE_STATUSES = ['valid', 'expiring', 'expired'] as const;
+export type CertificateStatusFilter = (typeof CERTIFICATE_STATUSES)[number];
+
+/** Filters of GET /instructors (and its CSV export); all optional. */
+export class ListInstructorsQuery extends ListPageQuery {
+  /** Words matched against name, e-mail, phone, external ref and home location name. */
   @IsOptional()
   @IsString()
   q?: string;
@@ -128,7 +135,33 @@ export class ListInstructorsQuery {
   @IsEnum(EmploymentType)
   employmentType?: EmploymentType;
 
+  /** Kept for compatibility; the screen uses `archive` (inactive = archived). */
   @IsOptional()
   @IsEnum(InstructorStatus)
   status?: InstructorStatus;
+
+  /** Has a certificate of this type (combined with `certificateStatus`: the same certificate). */
+  @IsOptional()
+  @IsUUID()
+  certificateTypeId?: string;
+
+  /** Has a certificate in this state today. */
+  @IsOptional()
+  @IsIn(CERTIFICATE_STATUSES)
+  certificateStatus?: CertificateStatusFilter;
 }
+
+/**
+ * One CSV import row: the create fields plus the skills (`Skills` column, by name), which
+ * the import writes into `instructor_skill` after saving the row.
+ */
+export class ImportInstructorDto extends CreateInstructorDto {
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true })
+  skillIds?: string[] | null;
+}
+
+export class UpdateImportInstructorDto extends PartialType(
+  ImportInstructorDto,
+) {}

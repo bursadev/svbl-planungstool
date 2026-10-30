@@ -2,8 +2,18 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
-import type { CreateSkillDto, UpdateSkillDto } from './dto/skill.dto.js';
+import type {
+  CreateSkillDto,
+  ListSkillsQuery,
+  UpdateSkillDto,
+} from './dto/skill.dto.js';
 import { Skill } from './skill.entity.js';
 
 @Injectable()
@@ -13,8 +23,21 @@ export class SkillsService {
     private readonly audit: AuditService,
   ) {}
 
-  list(): Promise<Skill[]> {
-    return this.skills.find({ order: { name: 'ASC' } });
+  /**
+   * Skills sorted by name, filtered and (with `page`) paged. `q` matches
+   * name, category and description, word by word and ignoring accents.
+   */
+  list(query: ListSkillsQuery = {}): Promise<Page<Skill>> {
+    const qb = this.skills.createQueryBuilder('s');
+    applySearch(qb, ['s.name', 's.category', 's.description'], query.q);
+    applyArchive(qb, query.archive, 's.active');
+    return pageOf(
+      qb,
+      query,
+      { name: 's.name', category: 's.category' },
+      'name',
+      's.id',
+    );
   }
 
   async get(id: string): Promise<Skill> {

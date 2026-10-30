@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 import { IsDateOnly } from '../../common/validators.js';
 import { DeviceMobility, DeviceStatus } from '../../database/enums.js';
 
@@ -47,8 +48,13 @@ export class CreateDeviceDto {
 
 export class UpdateDeviceDto extends PartialType(CreateDeviceDto) {}
 
-/** Filters of GET /devices; all optional. */
-export class ListDevicesQuery {
+/** Filters of GET /devices (and its CSV export); all optional. */
+export class ListDevicesQuery extends ListPageQuery {
+  /** Words matched against inventory number, type, home location, vendor and notes. */
+  @IsOptional()
+  @IsString()
+  q?: string;
+
   @IsOptional()
   @IsUUID()
   deviceTypeId?: string;

@@ -1,5 +1,7 @@
 import { apiFetch } from "./client";
+import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 
 /** Minimal Kurstyp for pickers; the full type lives in `lib/api/course-types.ts`. */
 export type MaintenanceCourseType = { id: string; code: string; name: string };
@@ -15,6 +17,8 @@ export type CertificateType = {
   warningLeadDays: number;
   /** Required maintenance courses per year; `null` = keine Pflege. */
   maintenanceMinPerYear: number | null;
+  /** False once archived: hidden from the list by default and from pickers. */
+  active: boolean;
   maintenanceCourseTypes: MaintenanceCourseType[];
 };
 
@@ -25,12 +29,26 @@ export type CreateCertificateType = {
   validityYears?: number | null;
   warningLeadDays?: number;
   maintenanceMinPerYear?: number | null;
+  active?: boolean;
 };
 
 export type UpdateCertificateType = Partial<CreateCertificateType>;
 
 export function listCertificateTypes(fetcher: ApiFetcher = apiFetch): Promise<CertificateType[]> {
   return fetcher<CertificateType[]>("/certificate-types");
+}
+
+/** Filters of `GET /certificate-types` and its CSV export; `q` matches code, name and issuer. */
+export type CertificateTypeFilters = ListPageParams & { q?: string };
+
+export const CERTIFICATE_TYPES_PATH = "/certificate-types";
+
+/** Zertifikatstypen matching the filters with the total (all rows unless `page` is set). */
+export function listCertificateTypesPage(
+  filters: CertificateTypeFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<CertificateType>> {
+  return fetchPage<CertificateType>(withQuery(CERTIFICATE_TYPES_PATH, filters), fetcher);
 }
 
 export function createCertificateType(

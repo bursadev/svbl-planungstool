@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 import type { Language } from "../format";
 
 export type EmploymentType = "employee" | "freelancer";
@@ -20,7 +21,7 @@ export type InstructorPreferences = {
 export type InstructorLocationRef = { id: string; code: string; name: string };
 export type InstructorSkillRef = { id: string; name: string };
 
-/** One row of `GET /instructors`, sorted by last name. */
+/** One row of `GET /instructors`, sorted by last and first name unless `sort` says otherwise. */
 export type InstructorRow = {
   id: string;
   firstName: string;
@@ -32,6 +33,11 @@ export type InstructorRow = {
   status: InstructorStatus;
   homeLocation: InstructorLocationRef;
   skills: InstructorSkillRef[];
+  weeklyHours: number | null;
+  overtimeCapHours: number | null;
+  costRate: number | null;
+  maxTravelMinutes: number | null;
+  externalRef: string | null;
 };
 
 /** A certificate with its type and the status derived for today (`warningLeadDays` of the type). */
@@ -63,18 +69,17 @@ export type Availability = {
 
 /** `GET /instructors/:id`: the row plus planning data, certificates (by validity) and availabilities (newest first). */
 export type Instructor = InstructorRow & {
-  weeklyHours: number | null;
-  overtimeCapHours: number | null;
-  costRate: number | null;
-  maxTravelMinutes: number | null;
   preferences: InstructorPreferences | null;
-  externalRef: string | null;
   certificates: InstructorCertificate[];
   availabilities: Availability[];
 };
 
-export type InstructorFilters = {
-  /** Matches first name, last name or e-mail. */
+/**
+ * Filters of `GET /instructors` and its CSV export. Archived Ausbilder are the inactive ones, so
+ * the screen uses `archive`; `status` stays for other callers.
+ */
+export type InstructorFilters = ListPageParams & {
+  /** Words matched against name, e-mail, phone, external ref and home location. */
   q?: string;
   skillId?: string;
   language?: Language;
@@ -82,7 +87,18 @@ export type InstructorFilters = {
   locationId?: string;
   employmentType?: EmploymentType;
   status?: InstructorStatus;
+  /** Has a certificate of this type. */
+  certificateTypeId?: string;
+  /** Has a certificate in this state today (with `certificateTypeId`: the same certificate). */
+  certificateStatus?: CertificateStatus;
 };
+
+export const INSTRUCTORS_PATH = "/instructors";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function instructorQuery(filters: InstructorFilters = {}): Record<string, string | number | undefined> {
+  return { ...filters };
+}
 
 export type CreateInstructor = {
   firstName: string;
@@ -129,14 +145,22 @@ export type UpdateAvailability = Partial<CreateAvailability>;
 const instructorPath = (id: string) => `/instructors/${encodeURIComponent(id)}`;
 
 /**
- * Ausbilder sorted by last name. Defaults to the browser client; Server Components pass
- * `serverApiFetch` from `@/lib/api/server`.
+ * Ausbilder sorted by name, all of them unless `page` is set. Defaults to the browser client;
+ * Server Components pass `serverApiFetch` from `@/lib/api/server`.
  */
 export function listInstructors(
   filters: InstructorFilters = {},
   fetcher: ApiFetcher = apiFetch,
 ): Promise<InstructorRow[]> {
-  return fetcher<InstructorRow[]>(withQuery("/instructors", filters));
+  return fetcher<InstructorRow[]>(withQuery(INSTRUCTORS_PATH, instructorQuery(filters)));
+}
+
+/** One page of Ausbilder with the total number of matches. */
+export function listInstructorsPage(
+  filters: InstructorFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<InstructorRow>> {
+  return fetchPage<InstructorRow>(withQuery(INSTRUCTORS_PATH, instructorQuery(filters)), fetcher);
 }
 
 /** One Ausbilder with skills, certificates and availabilities; throws `ApiError` 404 when unknown. */

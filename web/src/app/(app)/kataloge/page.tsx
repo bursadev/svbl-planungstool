@@ -4,11 +4,12 @@ import { CertificateTypesPanel } from "@/components/kataloge/certificate-types-p
 import { DeviceTypesPanel } from "@/components/kataloge/device-types-panel";
 import { SkillsPanel } from "@/components/kataloge/skills-panel";
 import { PageHeader } from "@/components/shell/page-header";
-import { listCertificateTypes } from "@/lib/api/certificate-types";
+import { listCertificateTypes, listCertificateTypesPage } from "@/lib/api/certificate-types";
 import { listCourseTypes } from "@/lib/api/course-types";
-import { listDeviceTypes } from "@/lib/api/device-types";
+import { listDeviceTypesPage } from "@/lib/api/device-types";
 import { serverApiFetch } from "@/lib/api/server";
-import { listSkills } from "@/lib/api/skills";
+import { listSkills, listSkillsPage } from "@/lib/api/skills";
+import { archiveScope, first, hasFilters, type SearchParams } from "@/lib/list-params";
 
 export const metadata: Metadata = { title: "Kataloge" };
 
@@ -16,12 +17,23 @@ function Count({ value }: { value: number }) {
   return <span className="font-mono text-xs text-muted-foreground tabular-nums">{value}</span>;
 }
 
-/** `/kataloge`: Skills, Zertifikatstypen and Gerätetypen in URL tabs (`?tab=`), all loaded on the server. */
-export default async function KatalogePage() {
-  const [skills, certificateTypes, deviceTypes, courseTypes] = await Promise.all([
+/**
+ * `/kataloge`: Skills, Zertifikatstypen and Gerätetypen in URL tabs (`?tab=`), all loaded on the
+ * server. The tabs share their filters (`q`, `archiv`): a search filters every tab, and the tab
+ * counts show the hits. The lists are small, so they are not paged.
+ */
+export default async function KatalogePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
+  const filters = { q: first(params.q), archive: archiveScope(params) };
+  const filtered = hasFilters(params);
+
+  const [skills, certificateTypes, deviceTypes, allSkills, allCertificateTypes, courseTypes] = await Promise.all([
+    listSkillsPage(filters, serverApiFetch),
+    listCertificateTypesPage(filters, serverApiFetch),
+    listDeviceTypesPage(filters, serverApiFetch),
+    // The Gerätetyp dialog picks from every entry, independent of the filters.
     listSkills(serverApiFetch),
     listCertificateTypes(serverApiFetch),
-    listDeviceTypes(serverApiFetch),
     // The Pflichtkurse picker degrades to a message when Kurstypen are unavailable.
     listCourseTypes(serverApiFetch)
       .then((types) => types.map(({ id, code, name }) => ({ id, code, name })))
@@ -38,30 +50,45 @@ export default async function KatalogePage() {
             label: (
               <>
                 Skills
-                <Count value={skills.length} />
+                <Count value={skills.total} />
               </>
             ),
-            content: <SkillsPanel skills={skills} />,
+            content: <SkillsPanel skills={skills.items} filters={filters} filtered={filtered} />,
           },
           {
             value: "zertifikatstypen",
             label: (
               <>
                 Zertifikatstypen
-                <Count value={certificateTypes.length} />
+                <Count value={certificateTypes.total} />
               </>
             ),
-            content: <CertificateTypesPanel types={certificateTypes} courseTypes={courseTypes} />,
+            content: (
+              <CertificateTypesPanel
+                types={certificateTypes.items}
+                courseTypes={courseTypes}
+                filters={filters}
+                filtered={filtered}
+              />
+            ),
           },
           {
             value: "geraetetypen",
             label: (
               <>
                 Gerätetypen
-                <Count value={deviceTypes.length} />
+                <Count value={deviceTypes.total} />
               </>
             ),
-            content: <DeviceTypesPanel types={deviceTypes} certificateTypes={certificateTypes} skills={skills} />,
+            content: (
+              <DeviceTypesPanel
+                types={deviceTypes.items}
+                certificateTypes={allCertificateTypes}
+                skills={allSkills}
+                filters={filters}
+                filtered={filtered}
+              />
+            ),
           },
         ]}
       />

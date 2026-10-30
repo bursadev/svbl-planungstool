@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 
 /** A Berufsbildner of one Lehrbetrieb. */
 export type Trainer = {
@@ -14,7 +15,7 @@ export type Trainer = {
   apprenticeCount: number;
 };
 
-/** One row of `GET /training-companies`, sorted by name. */
+/** One row of `GET /training-companies`. */
 export type TrainingCompanyRow = {
   id: string;
   name: string;
@@ -25,6 +26,8 @@ export type TrainingCompanyRow = {
   phone: string | null;
   /** Reference in OdAOrg. */
   externalRef: string | null;
+  /** False once archived. */
+  active: boolean;
   trainerCount: number;
   /** Active apprentices employed by this company. */
   apprenticeCount: number;
@@ -44,6 +47,7 @@ export type CreateTrainingCompany = {
   email?: string | null;
   phone?: string | null;
   externalRef?: string | null;
+  active?: boolean;
 };
 
 export type UpdateTrainingCompany = Partial<CreateTrainingCompany>;
@@ -72,15 +76,37 @@ export function listTrainers(q?: string, fetcher: ApiFetcher = apiFetch): Promis
   return fetcher<TrainerListItem[]>(withQuery("/trainers", { q }));
 }
 
+/** Filters of `GET /training-companies` and its CSV export; `q` matches name, PLZ, Ort, e-mail and external ref. */
+export type TrainingCompanyFilters = ListPageParams & {
+  q?: string;
+};
+
+export const TRAINING_COMPANIES_PATH = "/training-companies";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function trainingCompanyQuery(
+  filters: TrainingCompanyFilters = {},
+): Record<string, string | number | undefined> {
+  return { ...filters };
+}
+
 /**
- * Lehrbetriebe sorted by name; `q` matches name or city. Defaults to the browser client;
+ * Lehrbetriebe sorted by name, all of them unless `page` is set. Defaults to the browser client;
  * Server Components pass `serverApiFetch` from `@/lib/api/server`.
  */
 export function listTrainingCompanies(
-  q?: string,
+  filters: TrainingCompanyFilters = {},
   fetcher: ApiFetcher = apiFetch,
 ): Promise<TrainingCompanyRow[]> {
-  return fetcher<TrainingCompanyRow[]>(withQuery("/training-companies", { q }));
+  return fetcher<TrainingCompanyRow[]>(withQuery(TRAINING_COMPANIES_PATH, trainingCompanyQuery(filters)));
+}
+
+/** One page of Lehrbetriebe with the total number of matches. */
+export function listTrainingCompaniesPage(
+  filters: TrainingCompanyFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<TrainingCompanyRow>> {
+  return fetchPage<TrainingCompanyRow>(withQuery(TRAINING_COMPANIES_PATH, trainingCompanyQuery(filters)), fetcher);
 }
 
 /** One Lehrbetrieb with its Berufsbildner; throws `ApiError` 404 when it does not exist. */

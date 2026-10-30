@@ -10,7 +10,11 @@ async function bootstrap() {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  app.enableCors({ origin: origins });
+  app.enableCors({
+    origin: origins,
+    // Paged lists return their total here; CSV downloads name their file here.
+    exposedHeaders: ['X-Total-Count', 'Content-Disposition'],
+  });
   configureApp(app);
   await app.listen(process.env.PORT ?? 3001);
 }

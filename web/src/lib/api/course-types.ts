@@ -1,5 +1,7 @@
 import { apiFetch } from "./client";
+import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 import type { Language, Track } from "../format";
 
 export type CourseKind = "uk" | "adult" | "exam";
@@ -70,9 +72,37 @@ export type ReplaceRequirements = {
   devices: { deviceTypeId: string; quantity: number }[];
 };
 
-/** Kurstypen sorted by code. Server Components pass `serverApiFetch` from `@/lib/api/server`. */
+/** Filters of `GET /course-types` and its CSV export; `q` matches code, name and description. */
+export type CourseTypeFilters = ListPageParams & {
+  q?: string;
+  kind?: CourseKind;
+  /** `none`: types without a Lehrgang. */
+  track?: Track | "none";
+  /** Types offered in this language. */
+  language?: Language;
+};
+
+export const COURSE_TYPES_PATH = "/course-types";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function courseTypeQuery(filters: CourseTypeFilters = {}): Record<string, string | number | undefined> {
+  return { ...filters };
+}
+
+/**
+ * All Kurstypen sorted by code, archived ones included. Server Components pass `serverApiFetch`
+ * from `@/lib/api/server`.
+ */
 export function listCourseTypes(fetcher: ApiFetcher = apiFetch): Promise<CourseType[]> {
-  return fetcher<CourseType[]>("/course-types");
+  return fetcher<CourseType[]>(COURSE_TYPES_PATH);
+}
+
+/** One page of Kurstypen with the total number of matches. */
+export function listCourseTypesPage(
+  filters: CourseTypeFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<CourseType>> {
+  return fetchPage<CourseType>(withQuery(COURSE_TYPES_PATH, courseTypeQuery(filters)), fetcher);
 }
 
 export function getCourseType(id: string, fetcher: ApiFetcher = apiFetch): Promise<CourseType> {

@@ -8,12 +8,25 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { DataSource } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Roles, WRITE_ROLES } from '../auth/roles.decorator.js';
+import { BulkActionDto, runBulk } from '../common/bulk.js';
+import { runCsvImport } from '../common/csv-import.js';
+import { CsvImportDto, isDryRun, sendPage } from '../common/list-query.js';
+import {
+  csvFile,
+  datedName,
+  exportCsv,
+  templateCsv,
+} from '../common/tabular.js';
 import { uuidPipe } from '../common/uuid.pipe.js';
 import { DevicesService } from './devices.service.js';
+import { DEVICES_TABULAR } from './devices.tabular.js';
 import {
   CreateDeviceDto,
   CreateDeviceMoveDto,
@@ -25,11 +38,60 @@ import {
 
 @Controller('devices')
 export class DevicesController {
-  constructor(private readonly devices: DevicesService) {}
+  constructor(
+    private readonly devices: DevicesService,
+    private readonly ds: DataSource,
+  ) {}
 
   @Get()
-  list(@Query() query: ListDevicesQuery) {
-    return this.devices.list(query);
+  async list(
+    @Query() query: ListDevicesQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return sendPage(res, await this.devices.list(query));
+  }
+
+  // The fixed paths come before `:id`, which only accepts UUIDs.
+
+  /** All devices matching the list filters (no paging) as CSV. */
+  @Get('export.csv')
+  async exportCsv(@Query() query: ListDevicesQuery) {
+    const { items } = await this.devices.list(
+      Object.assign(query, { page: undefined }),
+    );
+    return csvFile(
+      datedName(DEVICES_TABULAR.fileName),
+      exportCsv(DEVICES_TABULAR.columns, items),
+    );
+  }
+
+  @Get('import-template.csv')
+  template() {
+    return csvFile(
+      `${DEVICES_TABULAR.fileName}-vorlage`,
+      templateCsv(DEVICES_TABULAR.columns),
+    );
+  }
+
+  @Post('import')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  import(
+    @Body() dto: CsvImportDto,
+    @Query('dryRun') dryRun: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return runCsvImport(this.ds, DEVICES_TABULAR, dto.csv, {
+      dryRun: isDryRun(dryRun),
+      actorUserId: user.dbUserId,
+    });
+  }
+
+  @Post('bulk')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  bulk(@Body() dto: BulkActionDto, @CurrentUser() user: AuthUser) {
+    return runBulk(this.ds, DEVICES_TABULAR, dto, user.dbUserId);
   }
 
   @Get(':id')

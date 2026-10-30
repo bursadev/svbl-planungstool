@@ -50,6 +50,8 @@ function SyncedSelect(props: UrlSelectProps) {
 
   function handleChange(next: string) {
     const params = new URLSearchParams(searchParams.toString());
+    // A new filter starts on the first page.
+    params.delete("seite");
     if (next === fallback) params.delete(param);
     else params.set(param, next);
     const query = params.toString();

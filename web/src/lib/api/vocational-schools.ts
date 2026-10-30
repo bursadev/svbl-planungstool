@@ -1,5 +1,7 @@
 import { apiFetch } from "./client";
+import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 import type { Language, Track } from "../format";
 
 /** One school day of a class in one school year. */
@@ -80,12 +82,39 @@ export type ReplaceSchoolClassDays = {
   days: { weekday: number; evening?: boolean }[];
 };
 
+/** Filters of `GET /vocational-schools` and its CSV export; `q` matches name, short name, address, contact and ÜK-Standort. */
+export type VocationalSchoolFilters = ListPageParams & {
+  q?: string;
+  language?: Language;
+  nearestLocationId?: string;
+};
+
+export const VOCATIONAL_SCHOOLS_PATH = "/vocational-schools";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function vocationalSchoolQuery(
+  filters: VocationalSchoolFilters = {},
+): Record<string, string | number | undefined> {
+  return { ...filters };
+}
+
 /**
- * Berufsschulen sorted by name, each with its classes. Defaults to the browser client;
- * Server Components pass `serverApiFetch` from `@/lib/api/server`.
+ * Berufsschulen sorted by name, each with its classes; all of them unless `page` is set. Defaults
+ * to the browser client; Server Components pass `serverApiFetch` from `@/lib/api/server`.
  */
-export function listVocationalSchools(fetcher: ApiFetcher = apiFetch): Promise<VocationalSchool[]> {
-  return fetcher<VocationalSchool[]>("/vocational-schools");
+export function listVocationalSchools(
+  filters: VocationalSchoolFilters = {},
+  fetcher: ApiFetcher = apiFetch,
+): Promise<VocationalSchool[]> {
+  return fetcher<VocationalSchool[]>(withQuery(VOCATIONAL_SCHOOLS_PATH, vocationalSchoolQuery(filters)));
+}
+
+/** One page of Berufsschulen with the total number of matches. */
+export function listVocationalSchoolsPage(
+  filters: VocationalSchoolFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<VocationalSchool>> {
+  return fetchPage<VocationalSchool>(withQuery(VOCATIONAL_SCHOOLS_PATH, vocationalSchoolQuery(filters)), fetcher);
 }
 
 /** One Berufsschule with its classes; throws `ApiError` 404 when it does not exist. */

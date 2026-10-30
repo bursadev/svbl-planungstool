@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 
 export class CreateSkillDto {
   @IsString()
@@ -20,3 +21,11 @@ export class CreateSkillDto {
 }
 
 export class UpdateSkillDto extends PartialType(CreateSkillDto) {}
+
+/** Filters of GET /skills (and its CSV export); all optional. */
+export class ListSkillsQuery extends ListPageQuery {
+  /** Words matched against name, category and description. */
+  @IsOptional()
+  @IsString()
+  q?: string;
+}

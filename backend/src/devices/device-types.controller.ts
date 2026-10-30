@@ -8,25 +8,89 @@ import {
   Patch,
   Post,
   Put,
+  Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { DataSource } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Roles, WRITE_ROLES } from '../auth/roles.decorator.js';
+import { BulkActionDto, runBulk } from '../common/bulk.js';
+import { runCsvImport } from '../common/csv-import.js';
+import { CsvImportDto, isDryRun, sendPage } from '../common/list-query.js';
+import {
+  csvFile,
+  datedName,
+  exportCsv,
+  templateCsv,
+} from '../common/tabular.js';
 import { uuidPipe } from '../common/uuid.pipe.js';
 import { DeviceTypesService } from './device-types.service.js';
+import { DEVICE_TYPES_TABULAR } from './device-types.tabular.js';
 import {
   CreateDeviceTypeDto,
+  ListDeviceTypesQuery,
   ReplaceQualificationsDto,
   UpdateDeviceTypeDto,
 } from './dto/device-type.dto.js';
 
 @Controller('device-types')
 export class DeviceTypesController {
-  constructor(private readonly types: DeviceTypesService) {}
+  constructor(
+    private readonly types: DeviceTypesService,
+    private readonly ds: DataSource,
+  ) {}
 
   @Get()
-  list() {
-    return this.types.list();
+  async list(
+    @Query() query: ListDeviceTypesQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return sendPage(res, await this.types.list(query));
+  }
+
+  // The fixed paths come before `:id`, which only accepts UUIDs.
+
+  /** All device types matching the list filters (no paging) as CSV, with their qualifications. */
+  @Get('export.csv')
+  async exportCsv(@Query() query: ListDeviceTypesQuery) {
+    const { items } = await this.types.list(
+      Object.assign(query, { page: undefined }),
+    );
+    return csvFile(
+      datedName(DEVICE_TYPES_TABULAR.fileName),
+      exportCsv(DEVICE_TYPES_TABULAR.columns, items),
+    );
+  }
+
+  @Get('import-template.csv')
+  template() {
+    return csvFile(
+      `${DEVICE_TYPES_TABULAR.fileName}-vorlage`,
+      templateCsv(DEVICE_TYPES_TABULAR.columns),
+    );
+  }
+
+  @Post('import')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  import(
+    @Body() dto: CsvImportDto,
+    @Query('dryRun') dryRun: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return runCsvImport(this.ds, DEVICE_TYPES_TABULAR, dto.csv, {
+      dryRun: isDryRun(dryRun),
+      actorUserId: user.dbUserId,
+    });
+  }
+
+  @Post('bulk')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  bulk(@Body() dto: BulkActionDto, @CurrentUser() user: AuthUser) {
+    return runBulk(this.ds, DEVICE_TYPES_TABULAR, dto, user.dbUserId);
   }
 
   @Get(':id')

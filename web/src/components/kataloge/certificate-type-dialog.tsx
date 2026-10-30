@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { applyApiErrors } from "@/components/form/api-errors";
 import { FormDialog } from "@/components/form/form-dialog";
+import { SwitchRow } from "@/components/form/switch-row";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,6 +43,7 @@ const schema = z.object({
     .int(maintenanceMessage)
     .min(1, maintenanceMessage)
     .nullable(),
+  active: z.boolean(),
   courseTypeIds: z.array(z.string()),
 });
 
@@ -55,6 +57,7 @@ function toFormValues(type?: CertificateType): FormValues {
     validityYears: type?.validityYears ?? null,
     warningLeadDays: type?.warningLeadDays ?? 60,
     maintenanceMinPerYear: type?.maintenanceMinPerYear ?? null,
+    active: type?.active ?? true,
     courseTypeIds: type?.maintenanceCourseTypes.map((c) => c.id) ?? [],
   };
 }
@@ -67,6 +70,7 @@ function toDto(values: FormValues): CreateCertificateType {
     validityYears: values.validityYears,
     warningLeadDays: values.warningLeadDays,
     maintenanceMinPerYear: values.maintenanceMinPerYear,
+    active: values.active,
   };
 }
 
@@ -276,6 +280,14 @@ export function CertificateTypeDialog({ open, onOpenChange, type, courseTypes }:
           </FormItem>
         )}
       />
+
+      {type ? (
+        <FormField
+          control={form.control}
+          name="active"
+          render={({ field }) => <SwitchRow label="Aktiv" checked={field.value} onCheckedChange={field.onChange} />}
+        />
+      ) : null}
     </FormDialog>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DataTable, DataTableCell, DataTableEmpty, DataTableHead } from "@/components/data/data-table";
 import { LinkRow } from "@/components/data/link-row";
+import { SortableHead } from "@/components/data/sortable-head";
 import { StatusDot } from "@/components/data/status-dot";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import type { ApprenticeRow } from "@/lib/api/apprentices";
@@ -12,19 +13,33 @@ const COLUMNS = 8;
 
 const dash = <span className="text-muted-foreground">–</span>;
 
-/** The `/lernende` list; every row links to the Lernende/r's detail page. */
-export function ApprenticesTable({ apprentices }: { apprentices: ApprenticeRow[] }) {
+type ApprenticesTableProps = {
+  apprentices: ApprenticeRow[];
+  /** Column heads sort the list through `?sortierung=` (the paged `/lernende` list); off elsewhere. */
+  sortable?: boolean;
+};
+
+/** The Lernende list; every row links to the Lernende/r's detail page. */
+export function ApprenticesTable({ apprentices, sortable = false }: ApprenticesTableProps) {
+  const head = (sortKey: string, label: string) =>
+    sortable ? (
+      <SortableHead sortKey={sortKey} defaultSort="name">
+        {label}
+      </SortableHead>
+    ) : (
+      <DataTableHead>{label}</DataTableHead>
+    );
   return (
     <DataTable>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <DataTableHead>Name</DataTableHead>
+          {head("name", "Name")}
           <DataTableHead>Geburtsdatum</DataTableHead>
           <DataTableHead>Lehrgang</DataTableHead>
-          <DataTableHead>Jahrgang</DataTableHead>
-          <DataTableHead>Berufsschule</DataTableHead>
+          {head("cohort", "Jahrgang")}
+          {head("school", "Berufsschule")}
           <DataTableHead>Klasse</DataTableHead>
-          <DataTableHead>Lehrbetrieb</DataTableHead>
+          {head("company", "Lehrbetrieb")}
           <DataTableHead>Status</DataTableHead>
         </TableRow>
       </TableHeader>

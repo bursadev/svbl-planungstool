@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon } from "lucide-react";
-import { MetaItem, MetaList, UrlTabs } from "@/components/data";
+import { ActiveBadge, MetaItem, MetaList, UrlTabs } from "@/components/data";
 import { CompanyActions } from "@/components/lehrbetriebe/company-actions";
 import { TrainersPanel } from "@/components/lehrbetriebe/trainers-panel";
 import { ApprenticesTable } from "@/components/lernende/apprentices-table";
@@ -77,6 +77,9 @@ export default async function LehrbetriebDetailPage({ params }: LehrbetriebDetai
                 <span className="font-mono">{company.externalRef}</span>
               </MetaItem>
             ) : null}
+            <MetaItem label="Status">
+              <ActiveBadge active={company.active} />
+            </MetaItem>
           </MetaList>
         </CardContent>
       </Card>

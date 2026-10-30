@@ -1,10 +1,12 @@
 import { PartialType } from '@nestjs/mapped-types';
 import {
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
 } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 
 export class CreateTrainingCompanyDto {
   @IsString()
@@ -35,11 +37,23 @@ export class CreateTrainingCompanyDto {
   @IsOptional()
   @IsString()
   externalRef?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 export class UpdateTrainingCompanyDto extends PartialType(
   CreateTrainingCompanyDto,
 ) {}
+
+/** Filters of GET /training-companies (and its CSV export); all optional. */
+export class ListTrainingCompaniesQuery extends ListPageQuery {
+  /** Words matched against name, city, postal code, e-mail and external ref. */
+  @IsOptional()
+  @IsString()
+  q?: string;
+}
 
 export class CreateTrainerDto {
   @IsString()

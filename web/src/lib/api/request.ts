@@ -30,6 +30,8 @@ export type ApiFetchOptions = {
   /** Attach the Clerk bearer token (default true). Set false for public endpoints. */
   auth?: boolean;
   signal?: AbortSignal;
+  /** Sees the successful response before its body is read, e.g. for `X-Total-Count`. */
+  onResponse?: (res: Response) => void;
 };
 
 /** Signature shared by `apiFetch` and `serverApiFetch`, so data functions can take either. */
@@ -47,7 +49,7 @@ function isFieldErrors(value: unknown): value is ApiFieldError[] {
 /** Sends the request with the given token and maps the response; throws `ApiError` on non-2xx. */
 export async function sendRequest<T>(
   path: string,
-  { method, body, signal }: ApiFetchOptions,
+  { method, body, signal, onResponse }: ApiFetchOptions,
   token: string | null,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -69,5 +71,6 @@ export async function sendRequest<T>(
       isFieldErrors(data?.errors) ? data.errors : undefined,
     );
   }
+  onResponse?.(res);
   return (res.status === 204 ? undefined : await res.json()) as T;
 }

@@ -34,7 +34,10 @@ describe('Locations (e2e)', () => {
   async function cleanup(): Promise<void> {
     await ds.query(`DELETE FROM "device" WHERE inventory_number = 'E2E-DEV'`);
     await ds.query(`DELETE FROM "device_type" WHERE code = 'E2E-DT'`);
-    await ds.query(`DELETE FROM "location" WHERE code LIKE 'E2E-%'`);
+    // Only this file's codes: the other e2e files create E2E-* locations in parallel.
+    await ds.query(
+      `DELETE FROM "location" WHERE code IN ('E2E-LOC', 'E2E-REF')`,
+    );
   }
 
   const api = () => request(app.getHttpServer());

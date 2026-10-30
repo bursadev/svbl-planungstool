@@ -25,4 +25,8 @@ export class TrainingCompany extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   externalRef: string | null;
+
+  /** False once archived: hidden from lists and pickers, kept for history. */
+  @Column({ type: 'boolean', default: true })
+  active: boolean;
 }

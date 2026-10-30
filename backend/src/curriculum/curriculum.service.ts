@@ -270,7 +270,12 @@ export class CurriculumService {
         cohort: true,
         location: true,
       },
-      order: { startsOn: 'ASC' },
+      // Same start: by module, the window for all Standorte before the regional ones (stable export).
+      order: {
+        startsOn: 'ASC',
+        curriculumModule: { sequence: 'ASC' },
+        locationId: { direction: 'ASC', nulls: 'FIRST' },
+      },
     });
     return windows.map(toWindowView);
   }

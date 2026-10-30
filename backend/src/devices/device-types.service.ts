@@ -6,6 +6,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { CertificateType } from '../instructors/certificate-type.entity.js';
 import { Skill } from '../instructors/skill.entity.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
@@ -13,6 +19,7 @@ import { DeviceTypeQualification } from './device-type-qualification.entity.js';
 import { DeviceType } from './device-type.entity.js';
 import type {
   CreateDeviceTypeDto,
+  ListDeviceTypesQuery,
   UpdateDeviceTypeDto,
 } from './dto/device-type.dto.js';
 
@@ -38,12 +45,33 @@ export class DeviceTypesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(): Promise<DeviceTypeView[]> {
-    const types = await this.types.find({ order: { code: 'ASC' } });
-    const links = await this.qualifications.find({
-      relations: { certificateType: true, skill: true },
-    });
-    return types.map((t) => this.withQualifications(t, links));
+  /**
+   * Device types sorted by code, filtered and (with `page`) paged, with their
+   * qualifications. `q` matches code and name, word by word and ignoring
+   * accents.
+   */
+  async list(query: ListDeviceTypesQuery = {}): Promise<Page<DeviceTypeView>> {
+    const qb = this.types.createQueryBuilder('t');
+    applySearch(qb, ['t.code', 't.name'], query.q);
+    applyArchive(qb, query.archive, 't.active');
+    const page = await pageOf(
+      qb,
+      query,
+      { code: 't.code', name: 't.name', category: 't.category' },
+      'code',
+      't.id',
+    );
+    const ids = page.items.map((t) => t.id);
+    const links = ids.length
+      ? await this.qualifications.find({
+          where: { deviceTypeId: In(ids) },
+          relations: { certificateType: true, skill: true },
+        })
+      : [];
+    return {
+      items: page.items.map((t) => withQualifications(t, links)),
+      total: page.total,
+    };
   }
 
   async get(id: string): Promise<DeviceTypeView> {
@@ -53,7 +81,7 @@ export class DeviceTypesService {
       where: { deviceTypeId: id },
       relations: { certificateType: true, skill: true },
     });
-    return this.withQualifications(type, links);
+    return withQualifications(type, links);
   }
 
   async create(
@@ -160,25 +188,26 @@ export class DeviceTypesService {
     });
     return this.get(id);
   }
+}
 
-  private withQualifications(
-    type: DeviceType,
-    links: DeviceTypeQualification[],
-  ): DeviceTypeView {
-    const own = links.filter((l) => l.deviceTypeId === type.id);
-    return Object.assign(type, {
-      qualifications: {
-        certificateTypes: own
-          .filter((l) => l.certificateType)
-          .map((l) => ({
-            id: l.certificateType!.id,
-            code: l.certificateType!.code,
-            name: l.certificateType!.name,
-          })),
-        skills: own
-          .filter((l) => l.skill)
-          .map((l) => ({ id: l.skill!.id, name: l.skill!.name })),
-      },
-    });
-  }
+/** Attaches the certificate types and skills of `links` that belong to the type. */
+export function withQualifications(
+  type: DeviceType,
+  links: DeviceTypeQualification[],
+): DeviceTypeView {
+  const own = links.filter((l) => l.deviceTypeId === type.id);
+  return Object.assign(type, {
+    qualifications: {
+      certificateTypes: own
+        .filter((l) => l.certificateType)
+        .map((l) => ({
+          id: l.certificateType!.id,
+          code: l.certificateType!.code,
+          name: l.certificateType!.name,
+        })),
+      skills: own
+        .filter((l) => l.skill)
+        .map((l) => ({ id: l.skill!.id, name: l.skill!.name })),
+    },
+  });
 }

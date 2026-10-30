@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 import type { Language } from "../format";
 
 /** An adult course participant, optionally sent by a Kunde. */
@@ -15,7 +16,7 @@ export type Participant = {
   customer: { id: string; name: string } | null;
 };
 
-/** One row of `GET /customers`, sorted by name. */
+/** One row of `GET /customers`. */
 export type CustomerRow = {
   id: string;
   name: string;
@@ -67,18 +68,42 @@ export type CreateParticipant = {
 
 export type UpdateParticipant = Partial<CreateParticipant>;
 
-export type ParticipantFilters = {
-  /** Matches first or last name. */
+/** Filters of `GET /customers` and its CSV export; `q` matches name, address, contact and the external refs. */
+export type CustomerFilters = ListPageParams & {
+  q?: string;
+};
+
+/** Filters of `GET /participants` and its CSV export. Teilnehmende cannot be archived, so `archive` is ignored. */
+export type ParticipantFilters = Omit<ListPageParams, "archive"> & {
+  /** Matches first and last name, e-mail and the Kunde's name. */
   q?: string;
   customerId?: string;
 };
 
+export const CUSTOMERS_PATH = "/customers";
+export const PARTICIPANTS_PATH = "/participants";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function customerQuery(filters: CustomerFilters = {}): Record<string, string | number | undefined> {
+  return { ...filters };
+}
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function participantQuery(filters: ParticipantFilters = {}): Record<string, string | number | undefined> {
+  return { ...filters };
+}
+
 /**
- * Kunden sorted by name; `q` matches name or city. Defaults to the browser client;
+ * Kunden sorted by name, all of them unless `page` is set. Defaults to the browser client;
  * Server Components pass `serverApiFetch` from `@/lib/api/server`.
  */
-export function listCustomers(q?: string, fetcher: ApiFetcher = apiFetch): Promise<CustomerRow[]> {
-  return fetcher<CustomerRow[]>(withQuery("/customers", { q }));
+export function listCustomers(filters: CustomerFilters = {}, fetcher: ApiFetcher = apiFetch): Promise<CustomerRow[]> {
+  return fetcher<CustomerRow[]>(withQuery(CUSTOMERS_PATH, customerQuery(filters)));
+}
+
+/** One page of Kunden with the total number of matches. */
+export function listCustomersPage(filters: CustomerFilters, fetcher: ApiFetcher = apiFetch): Promise<Page<CustomerRow>> {
+  return fetchPage<CustomerRow>(withQuery(CUSTOMERS_PATH, customerQuery(filters)), fetcher);
 }
 
 /** One Kunde with Teilnehmenden and Standorten; throws `ApiError` 404 when it does not exist. */
@@ -99,12 +124,20 @@ export function deleteCustomer(id: string, fetcher: ApiFetcher = apiFetch): Prom
   return fetcher<void>(`/customers/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-/** Teilnehmende sorted by last name, then first name. */
+/** Teilnehmende sorted by last name, all of them unless `page` is set. */
 export function listParticipants(
   filters: ParticipantFilters = {},
   fetcher: ApiFetcher = apiFetch,
 ): Promise<Participant[]> {
-  return fetcher<Participant[]>(withQuery("/participants", filters));
+  return fetcher<Participant[]>(withQuery(PARTICIPANTS_PATH, participantQuery(filters)));
+}
+
+/** One page of Teilnehmende with the total number of matches. */
+export function listParticipantsPage(
+  filters: ParticipantFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<Participant>> {
+  return fetchPage<Participant>(withQuery(PARTICIPANTS_PATH, participantQuery(filters)), fetcher);
 }
 
 export function createParticipant(dto: CreateParticipant, fetcher: ApiFetcher = apiFetch): Promise<Participant> {

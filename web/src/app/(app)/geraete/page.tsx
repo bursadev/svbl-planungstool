@@ -1,64 +1,65 @@
 import type { Metadata } from "next";
+import { ArchiveFilter, CsvMenu, Pagination, ResetFilters, SearchInput } from "@/components/data";
 import { CreateDeviceButton } from "@/components/geraete/create-device-button";
 import { DevicesTable } from "@/components/geraete/devices-table";
 import { FiltersBar } from "@/components/geraete/filters-bar";
 import { toPickerOptions } from "@/components/geraete/labels";
 import { PageHeader } from "@/components/shell/page-header";
 import { listDeviceTypes } from "@/lib/api/device-types";
-import { listDevices, type DeviceFilters, type DeviceMobility, type DeviceStatus } from "@/lib/api/devices";
+import { DEVICES_PATH, listDevicesPage, type DeviceFilters } from "@/lib/api/devices";
 import { listLocations } from "@/lib/api/locations";
 import { serverApiFetch } from "@/lib/api/server";
+import { first, hasFilters, oneOf, readListParams, uuidParam, type SearchParams } from "@/lib/list-params";
 
 export const metadata: Metadata = { title: "Geräte" };
 
-type GeraetePageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+const SORTABLE = ["inventoryNumber", "type", "location"] as const;
 
-const MOBILITIES: readonly DeviceMobility[] = ["fixed", "mobile", "rental"];
-const STATUSES: readonly DeviceStatus[] = ["available", "maintenance", "retired"];
-
-function first(value: string | string[] | undefined): string | undefined {
-  return (Array.isArray(value) ? value[0] : value)?.trim() || undefined;
-}
-
-function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T | undefined {
-  return allowed.includes(value as T) ? (value as T) : undefined;
-}
-
-/** «26 Geräte · 3 in Wartung · 2 Miete» for the current filter. */
-function summarize(devices: { status: DeviceStatus; mobility: DeviceMobility }[]): string {
-  const total = devices.length;
-  const maintenance = devices.filter((d) => d.status === "maintenance").length;
-  const rental = devices.filter((d) => d.mobility === "rental").length;
-  return `${total} ${total === 1 ? "Gerät" : "Geräte"} · ${maintenance} in Wartung · ${rental} Miete`;
-}
-
-/** `/geraete`: filters in the URL (`?typ=&standort=&mobilitaet=&status=`), list rendered on the server. */
-export default async function GeraetePage({ searchParams }: GeraetePageProps) {
+/**
+ * `/geraete`: the list with its filters, sorting and paging in the URL. Filters: `q`, `typ`,
+ * `standort`, `mobilitaet`, `status` (verfügbar, in Wartung) and `archiv`; retired devices are
+ * the archive and hidden by default.
+ */
+export default async function GeraetePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
-  // Unknown enum values are dropped rather than forwarded, so a stale link does not turn into a 400.
-  const filters: DeviceFilters = {
-    deviceTypeId: first(params.typ),
-    locationId: first(params.standort),
-    mobility: oneOf(first(params.mobilitaet), MOBILITIES),
-    status: oneOf(first(params.status), STATUSES),
+  const list = readListParams(params, SORTABLE);
+  // Unknown values are dropped rather than forwarded, so a stale link does not turn into a 400.
+  const filters: Omit<DeviceFilters, "page" | "pageSize" | "sort" | "dir"> = {
+    q: first(params.q),
+    deviceTypeId: uuidParam(params.typ),
+    locationId: uuidParam(params.standort),
+    mobility: oneOf(params.mobilitaet, ["fixed", "mobile", "rental"]),
+    status: oneOf(params.status, ["available", "maintenance"]),
+    archive: list.archive,
   };
 
-  const [devices, deviceTypes, locations] = await Promise.all([
-    listDevices(filters, serverApiFetch),
+  const [page, deviceTypes, locations] = await Promise.all([
+    listDevicesPage({ ...filters, ...list }, serverApiFetch),
     listDeviceTypes(serverApiFetch).then(toPickerOptions),
     listLocations(undefined, serverApiFetch).then(toPickerOptions),
   ]);
 
   return (
     <>
-      <PageHeader title="Geräte" actions={<CreateDeviceButton deviceTypes={deviceTypes} locations={locations} />} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <FiltersBar deviceTypes={deviceTypes} locations={locations} />
-        <p className="text-sm text-muted-foreground tabular-nums">{summarize(devices)}</p>
+      <PageHeader
+        title="Geräte"
+        actions={
+          <>
+            <CsvMenu basePath={DEVICES_PATH} plural="Geräte" filters={filters} filtered={hasFilters(params)} />
+            <CreateDeviceButton deviceTypes={deviceTypes} locations={locations} />
+          </>
+        }
+      />
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput placeholder="Inventar, Typ, Standort, Notizen" className="w-72" />
+          <FiltersBar deviceTypes={deviceTypes} locations={locations} />
+          <ArchiveFilter />
+          <ResetFilters />
+        </div>
+        <DevicesTable devices={page.items} deviceTypes={deviceTypes} locations={locations} />
+        <Pagination total={page.total} page={list.page} pageSize={list.pageSize} />
       </div>
-      <DevicesTable devices={devices} deviceTypes={deviceTypes} locations={locations} />
     </>
   );
 }

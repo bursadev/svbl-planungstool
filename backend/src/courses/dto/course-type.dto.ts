@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -13,6 +14,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 import {
   CourseKind,
   Language,
@@ -100,4 +102,47 @@ export class ReplaceRequirementsDto {
   @ValidateNested({ each: true })
   @Type(() => RequiredDeviceDto)
   devices: RequiredDeviceDto[];
+}
+
+/**
+ * One row of the CSV import: the course type plus its required skills and
+ * certificate types (replaced when the column is in the file; the device
+ * requirements stay as they are).
+ */
+export class ImportCourseTypeDto extends CreateCourseTypeDto {
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true })
+  skillIds?: string[] | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true })
+  certificateTypeIds?: string[] | null;
+}
+
+export class ImportUpdateCourseTypeDto extends PartialType(
+  ImportCourseTypeDto,
+) {}
+
+/** Filters of GET /course-types (and its CSV export); all optional. */
+export class ListCourseTypesQuery extends ListPageQuery {
+  /** Words matched against code, name and description. */
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsEnum(CourseKind)
+  kind?: CourseKind;
+
+  /** `none` for course types without a Lehrgang (not an ÜK). */
+  @IsOptional()
+  @IsIn([...Object.values(Track), 'none'])
+  track?: Track | 'none';
+
+  /** Course types offered in this language. */
+  @IsOptional()
+  @IsEnum(Language)
+  language?: Language;
 }

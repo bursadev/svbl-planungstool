@@ -4,15 +4,23 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { Location } from '../locations/location.entity.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
 import { Customer } from './customer.entity.js';
 import type {
   CreateCustomerDto,
+  ListCustomersQuery,
   UpdateCustomerDto,
 } from './dto/customer.dto.js';
+import type { ListParticipantsQuery } from './dto/participant-query.dto.js';
 import type {
   CreateParticipantDto,
   UpdateParticipantDto,
@@ -65,17 +73,43 @@ export class CustomersService {
     private readonly audit: AuditService,
   ) {}
 
-  /** All customers; `q` matches name or city. */
-  async list(q?: string): Promise<CustomerRow[]> {
-    const where = q
-      ? [{ name: ILike(`%${q}%`) }, { city: ILike(`%${q}%`) }]
-      : undefined;
-    const customers = await this.customers.find({
-      where,
-      order: { name: 'ASC' },
-    });
-    const counts = await this.counts();
-    return customers.map((customer) => toRow(customer, counts));
+  /**
+   * Customers with their participant and site counts, filtered and (with
+   * `page`) paged; the total goes into `X-Total-Count`. `q` matches name,
+   * address, city, contact and the external refs, word by word and ignoring
+   * accents.
+   */
+  async list(query: ListCustomersQuery = {}): Promise<Page<CustomerRow>> {
+    const qb = this.customers.createQueryBuilder('c');
+    applySearch(
+      qb,
+      [
+        'c.name',
+        'c.addressLine',
+        'c.postalCode',
+        'c.city',
+        'c.contactName',
+        'c.contactEmail',
+        'c.externalRefAbacus',
+        'c.externalRefOdaorg',
+      ],
+      query.q,
+    );
+    applyArchive(qb, query.archive, 'c.active');
+    const page = await pageOf(
+      qb,
+      query,
+      { name: 'c.name', city: 'c.city' },
+      'name',
+      'c.id',
+    );
+    const counts = await this.counts(
+      query.page ? page.items.map((c) => c.id) : undefined,
+    );
+    return {
+      items: page.items.map((customer) => toRow(customer, counts)),
+      total: page.total,
+    };
   }
 
   async get(id: string): Promise<CustomerView> {
@@ -90,7 +124,7 @@ export class CustomersService {
         where: { customerId: id },
         order: { name: 'ASC' },
       }),
-      this.counts(id),
+      this.counts([id]),
     ]);
     return {
       ...toRow(customer, counts),
@@ -154,23 +188,36 @@ export class CustomersService {
 
   // --- Participants ---------------------------------------------------------
 
-  /** All participants; `q` matches the name, `customerId` narrows to one customer. */
+  /**
+   * Participants with their customer, filtered and (with `page`) paged; the
+   * total goes into `X-Total-Count`. `q` matches first and last name, e-mail
+   * and the customer's name, word by word and ignoring accents;
+   * `customerId` narrows to one customer.
+   */
   async listParticipants(
-    q?: string,
-    customerId?: string,
-  ): Promise<ParticipantView[]> {
+    query: ListParticipantsQuery = {},
+  ): Promise<Page<ParticipantView>> {
     const qb = this.participants
       .createQueryBuilder('p')
-      .leftJoinAndSelect('p.customer', 'customer')
-      .orderBy('p.lastName', 'ASC')
-      .addOrderBy('p.firstName', 'ASC');
-    if (q) {
-      qb.andWhere('(p.firstName ILIKE :q OR p.lastName ILIKE :q)', {
-        q: `%${q}%`,
+      .leftJoinAndSelect('p.customer', 'customer');
+    applySearch(
+      qb,
+      ['p.firstName', 'p.lastName', 'p.email', 'customer.name'],
+      query.q,
+    );
+    if (query.customerId) {
+      qb.andWhere('p.customerId = :customerId', {
+        customerId: query.customerId,
       });
     }
-    if (customerId) qb.andWhere('p.customerId = :customerId', { customerId });
-    return (await qb.getMany()).map(toParticipantView);
+    const page = await pageOf(
+      qb,
+      query,
+      { name: 'p.lastName', firstName: 'p.firstName', email: 'p.email' },
+      'name',
+      'p.id',
+    );
+    return { items: page.items.map(toParticipantView), total: page.total };
   }
 
   async createParticipant(
@@ -262,8 +309,11 @@ export class CustomersService {
     return participant;
   }
 
-  /** Participants and customer sites per customer. */
-  private async counts(customerId?: string): Promise<Counts> {
+  /** Participants and customer sites per customer; all customers without `customerIds`. */
+  private async counts(customerIds?: string[]): Promise<Counts> {
+    if (customerIds && !customerIds.length) {
+      return { participants: new Map(), sites: new Map() };
+    }
     const participantQb = this.participants
       .createQueryBuilder('p')
       .select('p.customerId', 'customerId')
@@ -276,9 +326,11 @@ export class CustomersService {
       .addSelect('COUNT(*)', 'n')
       .where('l.customerId IS NOT NULL')
       .groupBy('l.customerId');
-    if (customerId) {
-      participantQb.andWhere('p.customerId = :customerId', { customerId });
-      siteQb.andWhere('l.customerId = :customerId', { customerId });
+    if (customerIds) {
+      participantQb.andWhere('p.customerId IN (:...customerIds)', {
+        customerIds,
+      });
+      siteQb.andWhere('l.customerId IN (:...customerIds)', { customerIds });
     }
     const [participantRows, siteRows] = await Promise.all([
       participantQb.getRawMany<{ customerId: string; n: string }>(),

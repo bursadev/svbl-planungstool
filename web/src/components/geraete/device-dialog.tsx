@@ -40,7 +40,7 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-/** A list row does not carry the notes, so callers load the detail before editing. */
+/** The device being edited; list rows and the detail both carry the notes. */
 export type EditableDevice = DeviceRow & { notes: string | null };
 
 function toFormValues(device?: EditableDevice): FormValues {

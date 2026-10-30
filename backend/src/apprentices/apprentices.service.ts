@@ -3,6 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { WRITE_ROLES } from '../auth/roles.decorator.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { Apprentice } from './apprentice.entity.js';
 import type { ListApprenticesQuery } from './dto/apprentice.dto.js';
 
@@ -56,21 +62,43 @@ export class ApprenticesService {
     private readonly apprentices: Repository<Apprentice>,
   ) {}
 
-  async list(query: ListApprenticesQuery): Promise<ApprenticeRow[]> {
+  /**
+   * Lernende as list rows, filtered and (with `page`) paged; the total goes
+   * into `X-Total-Count`. See `query` for the filters.
+   */
+  async list(query: ListApprenticesQuery = {}): Promise<Page<ApprenticeRow>> {
+    const page = await this.query(query);
+    return { total: page.total, items: page.items.map(toRow) };
+  }
+
+  /**
+   * The matching Lernende with their relations, unpaged unless `page` is set:
+   * the rows of the CSV export. `q` matches first and last name, external
+   * id, e-mail, training company and class, word by word and ignoring
+   * accents. Active = status `active`; archived = finished or dropped.
+   */
+  async query(query: ListApprenticesQuery = {}): Promise<Page<Apprentice>> {
     const qb = this.apprentices
       .createQueryBuilder('a')
       .leftJoinAndSelect('a.cohort', 'cohort')
       .leftJoinAndSelect('a.vocationalSchool', 'school')
       .leftJoinAndSelect('a.schoolClass', 'cls')
       .leftJoinAndSelect('a.trainingCompany', 'company')
-      .orderBy('a.lastName', 'ASC')
-      .addOrderBy('a.firstName', 'ASC');
-    const q = query.q?.trim();
-    if (q) {
-      qb.andWhere('(a.firstName ILIKE :q OR a.lastName ILIKE :q)', {
-        q: `%${q}%`,
-      });
-    }
+      // Last name, then first name, as one sort key for `pageOf`.
+      .addSelect("concat(a.lastName, ' ', a.firstName)", 'name_sort');
+    applySearch(
+      qb,
+      [
+        'a.firstName',
+        'a.lastName',
+        'a.externalId',
+        'a.email',
+        'company.name',
+        'cls.code',
+      ],
+      query.q,
+    );
+    applyArchive(qb, query.archive, "a.status = 'active'");
     if (query.vocationalSchoolId) {
       qb.andWhere('a.vocationalSchoolId = :schoolId', {
         schoolId: query.vocationalSchoolId,
@@ -84,7 +112,21 @@ export class ApprenticesService {
       });
     }
     if (query.track) qb.andWhere('a.track = :track', { track: query.track });
-    return (await qb.getMany()).map(toRow);
+    if (query.language) {
+      qb.andWhere('a.language = :language', { language: query.language });
+    }
+    return pageOf(
+      qb,
+      query,
+      {
+        name: 'name_sort',
+        school: 'school.shortName',
+        cohort: 'cohort.label',
+        company: 'company.name',
+      },
+      'name',
+      'a.id',
+    );
   }
 
   async get(id: string, actor: AuthUser): Promise<ApprenticeDetail> {

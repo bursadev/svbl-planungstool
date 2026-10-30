@@ -1,69 +1,72 @@
-import { listSkills } from "@/lib/api/skills";
-import { listCertificateTypes } from "@/lib/api/certificate-types";
-import { listDeviceTypes } from "@/lib/api/device-types";
 import type { Metadata } from "next";
-import { CourseTypeCards } from "@/components/kurse/course-type-cards";
+import { ArchiveFilter, CsvMenu, Pagination, ResetFilters, SearchInput } from "@/components/data";
 import { CourseTypeFilters } from "@/components/kurse/course-type-filters";
+import { CourseTypesTable } from "@/components/kurse/course-types-table";
 import { CreateCourseTypeButton } from "@/components/kurse/create-course-type-button";
-import { parseActive, parseKind, parseTrackFilter } from "@/components/kurse/search-params";
+import { parseKind, parseTrackFilter } from "@/components/kurse/search-params";
+import { listCertificateTypes } from "@/lib/api/certificate-types";
 import {
-  listCourseTypes,
+  COURSE_TYPES_PATH,
+  courseTypeQuery,
+  listCourseTypesPage,
+  type CourseTypeFilters as Filters,
 } from "@/lib/api/course-types";
+import { listDeviceTypes } from "@/lib/api/device-types";
 import { serverApiFetch } from "@/lib/api/server";
+import { listSkills } from "@/lib/api/skills";
+import { first, hasFilters, oneOf, readListParams, type SearchParams } from "@/lib/list-params";
 
 export const metadata: Metadata = { title: "Kurstypen" };
 
-type KurstypenPageProps = {
-  searchParams: Promise<{
-    art?: string | string[];
-    lehrgang?: string | string[];
-    aktiv?: string | string[];
-  }>;
-};
+const SORTABLE = ["code", "name", "duration"] as const;
 
 /**
- * `/kurse/typen`: filters in the URL (`?art=`, `?lehrgang=`, `?aktiv=`), cards rendered on the
- * server. `GET /course-types` has no filters, so the list is narrowed here.
+ * `/kurse/typen`: the Kurstypen as a paged table, filtered on the server. Filters in the URL:
+ * `q`, `art`, `lehrgang` (`efz`, `eba`, `keiner`), `sprache`, `archiv`; plus paging and sorting.
  */
-export default async function KurstypenPage({ searchParams }: KurstypenPageProps) {
+export default async function KurstypenPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
-  const kind = parseKind(params.art);
-  const track = parseTrackFilter(params.lehrgang);
-  const active = parseActive(params.aktiv);
+  const list = readListParams(params, SORTABLE);
+  const filters: Omit<Filters, "page" | "pageSize" | "sort" | "dir"> = {
+    q: first(params.q),
+    kind: parseKind(params.art),
+    track: parseTrackFilter(params.lehrgang),
+    language: oneOf(params.sprache, ["de", "fr", "it"]),
+    archive: list.archive,
+  };
+  const filtered = hasFilters(params);
 
-  const [courseTypes, skills, certificateTypes, deviceTypes] = await Promise.all([
-    listCourseTypes(serverApiFetch),
+  const [page, skills, certificateTypes, deviceTypes] = await Promise.all([
+    listCourseTypesPage({ ...filters, ...list }, serverApiFetch),
     // The pickers belong to the Kataloge slice; the dialog says so when one is unavailable.
     listSkills(serverApiFetch).catch(() => null),
     listCertificateTypes(serverApiFetch).catch(() => null),
     listDeviceTypes(serverApiFetch).catch(() => null),
   ]);
 
-  const visible = courseTypes.filter(
-    (courseType) =>
-      (kind === undefined || courseType.kind === kind) &&
-      (track === undefined || (track === "none" ? courseType.track === null : courseType.track === track)) &&
-      (active === undefined || courseType.active === active),
-  );
-  const filtered = kind !== undefined || track !== undefined || active !== undefined;
-
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput placeholder="Code, Name, Beschreibung" className="w-72" />
         <CourseTypeFilters />
-        <p className="text-sm text-muted-foreground tabular-nums">
-          {filtered ? `${visible.length} von ${courseTypes.length}` : courseTypes.length}{" "}
-          {courseTypes.length === 1 ? "Kurstyp" : "Kurstypen"}
-        </p>
-        <div className="ms-auto">
+        <ArchiveFilter />
+        <ResetFilters />
+        <div className="ms-auto flex items-center gap-2">
+          <CsvMenu
+            basePath={COURSE_TYPES_PATH}
+            plural="Kurstypen"
+            filters={courseTypeQuery(filters)}
+            filtered={filtered}
+          />
           <CreateCourseTypeButton />
         </div>
       </div>
-      <CourseTypeCards
-        courseTypes={visible}
+      <CourseTypesTable
+        courseTypes={page.items}
         options={{ skills, certificateTypes, deviceTypes }}
-        emptyText={courseTypes.length === 0 ? "Noch keine Kurstypen erfasst." : "Keine Kurstypen für diese Filter."}
+        emptyText={filtered ? "Keine Kurstypen für diese Filter." : "Noch keine Kurstypen erfasst."}
       />
+      <Pagination total={page.total} page={list.page} pageSize={list.pageSize} />
     </>
   );
 }

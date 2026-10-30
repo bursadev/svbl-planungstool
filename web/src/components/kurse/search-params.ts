@@ -24,11 +24,3 @@ export function parseKind(value: Param): CourseKind | undefined {
   const first = firstParam(value);
   return first === "uk" || first === "adult" || first === "exam" ? first : undefined;
 }
-
-/** `?aktiv=ja|nein`; anything else means «alle». */
-export function parseActive(value: Param): boolean | undefined {
-  const first = firstParam(value);
-  if (first === "ja") return true;
-  if (first === "nein") return false;
-  return undefined;
-}

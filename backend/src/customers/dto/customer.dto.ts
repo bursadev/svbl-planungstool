@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 
 export class CreateCustomerDto {
   @IsString()
@@ -51,3 +52,11 @@ export class CreateCustomerDto {
 }
 
 export class UpdateCustomerDto extends PartialType(CreateCustomerDto) {}
+
+/** Filters of GET /customers (and its CSV export); all optional. */
+export class ListCustomersQuery extends ListPageQuery {
+  /** Words matched against name, address, city, contact and the external refs. */
+  @IsOptional()
+  @IsString()
+  q?: string;
+}

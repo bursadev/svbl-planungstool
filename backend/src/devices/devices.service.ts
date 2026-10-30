@@ -5,9 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { type FindOptionsWhere, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
-import { DeviceMobility } from '../database/enums.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
+import { DeviceMobility, DeviceStatus } from '../database/enums.js';
 import { Location } from '../locations/location.entity.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
 import { DeviceMove } from './device-move.entity.js';
@@ -37,11 +43,11 @@ export interface DeviceRow {
   rentalFrom: string | null;
   rentalUntil: string | null;
   rentalVendor: string | null;
+  notes: string | null;
   lastMove: { toLocation: LocationRef; effectiveOn: string } | null;
 }
 
 export interface DeviceDetail extends DeviceRow {
-  notes: string | null;
   moves: DeviceMove[];
   maintenanceWindows: MaintenanceWindow[];
   createdAt: Date;
@@ -70,23 +76,61 @@ export class DevicesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(query: ListDevicesQuery): Promise<DeviceRow[]> {
-    // TypeORM rejects undefined values in `where`, so only set given filters.
-    const where: FindOptionsWhere<Device> = {};
-    if (query.deviceTypeId) where.deviceTypeId = query.deviceTypeId;
-    if (query.locationId) where.homeLocationId = query.locationId;
-    if (query.mobility) where.mobility = query.mobility;
-    if (query.status) where.status = query.status;
-    const devices = await this.devices.find({
-      where,
-      relations: {
-        deviceType: true,
-        homeLocation: true,
-        moves: { toLocation: true },
+  /**
+   * Devices as list rows, filtered and (with `page`) paged; the total goes into
+   * `X-Total-Count`. `q` matches inventory number, type code and name, home
+   * location code and name, rental vendor and notes, word by word and ignoring
+   * accents. Retired devices count as archived.
+   */
+  async list(query: ListDevicesQuery = {}): Promise<Page<DeviceRow>> {
+    const qb = this.devices
+      .createQueryBuilder('d')
+      .innerJoinAndSelect('d.deviceType', 'deviceType')
+      .innerJoinAndSelect('d.homeLocation', 'homeLocation')
+      .leftJoinAndSelect('d.moves', 'move')
+      .leftJoinAndSelect('move.toLocation', 'moveTo');
+    applySearch(
+      qb,
+      [
+        'd.inventoryNumber',
+        'deviceType.code',
+        'deviceType.name',
+        'homeLocation.code',
+        'homeLocation.name',
+        'd.rentalVendor',
+        'd.notes',
+      ],
+      query.q,
+    );
+    applyArchive(qb, query.archive, `d.status <> '${DeviceStatus.Retired}'`);
+    if (query.deviceTypeId) {
+      qb.andWhere('d.deviceTypeId = :deviceTypeId', {
+        deviceTypeId: query.deviceTypeId,
+      });
+    }
+    if (query.locationId) {
+      qb.andWhere('d.homeLocationId = :locationId', {
+        locationId: query.locationId,
+      });
+    }
+    if (query.mobility) {
+      qb.andWhere('d.mobility = :mobility', { mobility: query.mobility });
+    }
+    if (query.status) {
+      qb.andWhere('d.status = :status', { status: query.status });
+    }
+    const page = await pageOf(
+      qb,
+      query,
+      {
+        inventoryNumber: 'd.inventoryNumber',
+        type: 'deviceType.name',
+        location: 'homeLocation.name',
       },
-      order: { inventoryNumber: 'ASC', moves: { effectiveOn: 'ASC' } },
-    });
-    return devices.map((d) => this.toRow(d));
+      'inventoryNumber',
+      'd.id',
+    );
+    return { items: page.items.map((d) => this.toRow(d)), total: page.total };
   }
 
   async get(id: string): Promise<DeviceDetail> {
@@ -327,6 +371,7 @@ export class DevicesService {
       rentalFrom: d.rentalFrom,
       rentalUntil: d.rentalUntil,
       rentalVendor: d.rentalVendor,
+      notes: d.notes,
       lastMove: last
         ? { toLocation: ref(last.toLocation), effectiveOn: last.effectiveOn }
         : null,
@@ -340,7 +385,6 @@ export class DevicesService {
     });
     return {
       ...this.toRow(d),
-      notes: d.notes,
       moves: [...(d.moves ?? [])].sort((a, b) =>
         b.effectiveOn.localeCompare(a.effectiveOn),
       ),

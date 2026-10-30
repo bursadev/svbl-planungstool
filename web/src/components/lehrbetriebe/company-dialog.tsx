@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { FormDialog, applyApiErrors } from "@/components/form";
+import { FormDialog, SwitchRow, applyApiErrors } from "@/components/form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,6 +28,7 @@ const schema = z.object({
   email: optionalText.refine((value) => value === "" || z.email().safeParse(value).success, "Ungültige E-Mail-Adresse."),
   phone: optionalText,
   externalRef: optionalText,
+  active: z.boolean(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -41,6 +42,7 @@ function toFormValues(company?: TrainingCompanyRow): FormValues {
     email: company?.email ?? "",
     phone: company?.phone ?? "",
     externalRef: company?.externalRef ?? "",
+    active: company?.active ?? true,
   };
 }
 
@@ -55,6 +57,7 @@ function toDto(values: FormValues): CreateTrainingCompany {
     email: text(values.email),
     phone: text(values.phone),
     externalRef: text(values.externalRef),
+    active: values.active,
   };
 }
 
@@ -206,6 +209,14 @@ export function CompanyDialog({ open, onOpenChange, company, onCreated }: Compan
           </FormItem>
         )}
       />
+
+      {company ? (
+        <FormField
+          control={form.control}
+          name="active"
+          render={({ field }) => <SwitchRow label="Aktiv" checked={field.value} onCheckedChange={field.onChange} />}
+        />
+      ) : null}
     </FormDialog>
   );
 }

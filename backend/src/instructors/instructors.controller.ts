@@ -9,10 +9,22 @@ import {
   Post,
   Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { DataSource } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { Roles, WRITE_ROLES } from '../auth/roles.decorator.js';
+import { BulkActionDto, runBulk } from '../common/bulk.js';
+import { runCsvImport } from '../common/csv-import.js';
+import { CsvImportDto, isDryRun, sendPage } from '../common/list-query.js';
+import {
+  csvFile,
+  datedName,
+  exportCsv,
+  templateCsv,
+} from '../common/tabular.js';
 import { uuidPipe } from '../common/uuid.pipe.js';
 import {
   CreateAvailabilityDto,
@@ -29,14 +41,64 @@ import {
   UpdateInstructorDto,
 } from './dto/instructor.dto.js';
 import { InstructorsService } from './instructors.service.js';
+import { INSTRUCTORS_TABULAR } from './instructors.tabular.js';
 
 @Controller('instructors')
 export class InstructorsController {
-  constructor(private readonly instructors: InstructorsService) {}
+  constructor(
+    private readonly instructors: InstructorsService,
+    private readonly ds: DataSource,
+  ) {}
 
   @Get()
-  list(@Query() query: ListInstructorsQuery) {
-    return this.instructors.list(query);
+  async list(
+    @Query() query: ListInstructorsQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return sendPage(res, await this.instructors.list(query));
+  }
+
+  // The fixed paths come before `:id`, which only accepts UUIDs.
+
+  /** All instructors matching the list filters (no paging) as CSV. */
+  @Get('export.csv')
+  async exportCsv(@Query() query: ListInstructorsQuery) {
+    const { items } = await this.instructors.list(
+      Object.assign(query, { page: undefined }),
+    );
+    return csvFile(
+      datedName(INSTRUCTORS_TABULAR.fileName),
+      exportCsv(INSTRUCTORS_TABULAR.columns, items),
+    );
+  }
+
+  @Get('import-template.csv')
+  template() {
+    return csvFile(
+      `${INSTRUCTORS_TABULAR.fileName}-vorlage`,
+      templateCsv(INSTRUCTORS_TABULAR.columns),
+    );
+  }
+
+  @Post('import')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  import(
+    @Body() dto: CsvImportDto,
+    @Query('dryRun') dryRun: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return runCsvImport(this.ds, INSTRUCTORS_TABULAR, dto.csv, {
+      dryRun: isDryRun(dryRun),
+      actorUserId: user.dbUserId,
+    });
+  }
+
+  @Post('bulk')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  bulk(@Body() dto: BulkActionDto, @CurrentUser() user: AuthUser) {
+    return runBulk(this.ds, INSTRUCTORS_TABULAR, dto, user.dbUserId);
   }
 
   @Get(':id')

@@ -20,14 +20,12 @@ describe('Schools and apprentices (e2e)', () => {
     ds = app.get(DataSource);
     await cleanup();
     locationId = (
-      await ds
-        .getRepository(Location)
-        .save({
-          code: 'E2ES-LOC',
-          name: 'E2ES Ort',
-          kind: 'training_centre',
-          languageRegion: 'de',
-        })
+      await ds.getRepository(Location).save({
+        code: 'E2ES-LOC',
+        name: 'E2ES Ort',
+        kind: 'training_centre',
+        languageRegion: 'de',
+      })
     ).id;
     cohortId = (
       await ds
@@ -200,5 +198,6 @@ describe('Schools and apprentices (e2e)', () => {
       .delete(`/vocational-schools/${schoolId}`)
       .set(asPlanner)
       .expect(204);
-  });
+    // Many sequential round trips to the remote database; 5 s is too tight.
+  }, 15_000);
 });

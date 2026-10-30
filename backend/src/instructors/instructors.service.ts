@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import { applyArchive, applySearch, type Page } from '../common/list-query.js';
 import {
   AvailabilityKind,
   AvailabilitySource,
@@ -63,15 +64,15 @@ export interface InstructorRow {
   status: Instructor['status'];
   homeLocation: Pick<Location, 'id' | 'code' | 'name'>;
   skills: Pick<Skill, 'id' | 'name'>[];
-}
-
-export interface InstructorDetail extends InstructorRow {
   weeklyHours: number | null;
   overtimeCapHours: number | null;
   costRate: number | null;
   maxTravelMinutes: number | null;
-  preferences: Instructor['preferences'];
   externalRef: string | null;
+}
+
+export interface InstructorDetail extends InstructorRow {
+  preferences: Instructor['preferences'];
   certificates: InstructorCertificateView[];
   availabilities: Availability[];
   createdAt: Date;
@@ -80,6 +81,42 @@ export interface InstructorDetail extends InstructorRow {
 
 const numeric = (v: number | null | undefined): string | null | undefined =>
   v === undefined ? undefined : v === null ? null : String(v);
+
+const decimal = (v: string | null): number | null =>
+  v === null ? null : Number(v);
+
+/** Sort keys of `GET /instructors` → query-builder paths (ties: by id). */
+const SORTABLE: Record<string, string[]> = {
+  name: ['i.lastName', 'i.firstName'],
+  location: ['loc.name'],
+  employmentType: ['i.employmentType'],
+};
+
+/** SQL over certificate `c` and its type `t` for each certificate state today. */
+const CERTIFICATE_STATUS_SQL: Record<CertificateStatus, string> = {
+  valid:
+    '(c.valid_until IS NULL OR c.valid_until >= CURRENT_DATE + t.warning_lead_days)',
+  expiring:
+    'c.valid_until >= CURRENT_DATE AND c.valid_until < CURRENT_DATE + t.warning_lead_days',
+  expired: 'c.valid_until < CURRENT_DATE',
+};
+
+/**
+ * DTO fields → entity columns: the decimals are stored as numeric strings.
+ * Fields absent from the DTO stay absent; preferences are handled by the caller.
+ */
+export function instructorColumns(dto: object): Partial<Instructor> {
+  const columns: Record<string, unknown> = {
+    ...(dto as Record<string, unknown>),
+  };
+  delete columns.preferences;
+  for (const field of ['weeklyHours', 'overtimeCapHours', 'costRate']) {
+    if (field in columns) {
+      columns[field] = numeric(columns[field] as number | null | undefined);
+    }
+  }
+  return columns as Partial<Instructor>;
+}
 
 @Injectable()
 export class InstructorsService {
@@ -103,22 +140,31 @@ export class InstructorsService {
 
   // --- Instructors --------------------------------------------------------
 
-  async list(query: ListInstructorsQuery): Promise<InstructorRow[]> {
+  /**
+   * Instructors with home location and skills, filtered and (with `page`)
+   * paged; the total goes into `X-Total-Count`. `q` matches name, e-mail,
+   * phone, external ref and home location, word by word and ignoring accents.
+   * Archived means `status = inactive`.
+   */
+  async list(query: ListInstructorsQuery = {}): Promise<Page<InstructorRow>> {
     const qb = this.instructors
       .createQueryBuilder('i')
       .leftJoinAndSelect('i.homeLocation', 'loc')
       .leftJoinAndSelect('i.skills', 'is')
-      .leftJoinAndSelect('is.skill', 'skill')
-      .orderBy('i.lastName', 'ASC')
-      .addOrderBy('i.firstName', 'ASC')
-      .addOrderBy('skill.name', 'ASC');
-    const q = query.q?.trim();
-    if (q) {
-      qb.andWhere(
-        '(i.firstName ILIKE :q OR i.lastName ILIKE :q OR i.email ILIKE :q)',
-        { q: `%${q}%` },
-      );
-    }
+      .leftJoinAndSelect('is.skill', 'skill');
+    applySearch(
+      qb,
+      [
+        'i.firstName',
+        'i.lastName',
+        'i.email',
+        'i.phone',
+        'i.externalRef',
+        'loc.name',
+      ],
+      query.q,
+    );
+    applyArchive(qb, query.archive, `i.status = 'active'`);
     if (query.skillId) {
       qb.andWhere(
         'EXISTS (SELECT 1 FROM instructor_skill x WHERE x.instructor_id = i.id AND x.skill_id = :skillId)',
@@ -141,8 +187,34 @@ export class InstructorsService {
     if (query.status) {
       qb.andWhere('i.status = :status', { status: query.status });
     }
-    const rows = await qb.getMany();
-    return rows.map((i) => this.toRow(i));
+    if (query.certificateTypeId || query.certificateStatus) {
+      // One certificate has to match both, type and state.
+      const conditions = ['c.instructor_id = i.id'];
+      if (query.certificateTypeId) {
+        conditions.push('c.certificate_type_id = :certificateTypeId');
+      }
+      if (query.certificateStatus) {
+        conditions.push(CERTIFICATE_STATUS_SQL[query.certificateStatus]);
+      }
+      qb.andWhere(
+        `EXISTS (SELECT 1 FROM instructor_certificate c JOIN certificate_type t ON t.id = c.certificate_type_id WHERE ${conditions.join(' AND ')})`,
+        { certificateTypeId: query.certificateTypeId },
+      );
+    }
+
+    // Like `pageOf`, but the name sorts by last and then first name.
+    const key = query.sort && SORTABLE[query.sort] ? query.sort : 'name';
+    const dir = query.dir === 'desc' ? 'DESC' : 'ASC';
+    const [firstPath, ...morePaths] = SORTABLE[key];
+    qb.orderBy(firstPath, dir, 'NULLS LAST');
+    for (const path of morePaths) qb.addOrderBy(path, dir, 'NULLS LAST');
+    qb.addOrderBy('i.id', 'ASC');
+    if (query.page) {
+      const size = query.pageSize ?? 50;
+      qb.skip((query.page - 1) * size).take(size);
+    }
+    const [rows, total] = await qb.getManyAndCount();
+    return { items: rows.map((i) => this.toRow(i)), total };
   }
 
   async get(id: string): Promise<InstructorDetail> {
@@ -155,7 +227,7 @@ export class InstructorsService {
     actor: AuthUser,
   ): Promise<InstructorDetail> {
     await this.assertLocation(dto.homeLocationId);
-    const instructor = this.instructors.create(this.toColumns(dto));
+    const instructor = this.instructors.create(instructorColumns(dto));
     await this.instructors.save(instructor);
     await this.audit.record({
       actorUserId: actor.dbUserId,
@@ -176,7 +248,7 @@ export class InstructorsService {
     const instructor = await this.load(id);
     if (dto.homeLocationId) await this.assertLocation(dto.homeLocationId);
     const before = snapshot(instructor);
-    this.instructors.merge(instructor, this.toColumns(dto));
+    this.instructors.merge(instructor, instructorColumns(dto));
     if (dto.preferences !== undefined) instructor.preferences = dto.preferences;
     await this.instructors.save(instructor);
     await this.audit.record({
@@ -468,19 +540,6 @@ export class InstructorsService {
     }
   }
 
-  /** DTO numbers → the entity's numeric strings; preferences handled by the caller. */
-  private toColumns(dto: UpdateInstructorDto): Partial<Instructor> {
-    const { weeklyHours, overtimeCapHours, costRate, preferences, ...rest } =
-      dto;
-    void preferences;
-    return {
-      ...rest,
-      weeklyHours: numeric(weeklyHours),
-      overtimeCapHours: numeric(overtimeCapHours),
-      costRate: numeric(costRate),
-    } as Partial<Instructor>;
-  }
-
   private toRow(i: Instructor): InstructorRow {
     return {
       id: i.id,
@@ -499,19 +558,18 @@ export class InstructorsService {
       skills: (i.skills ?? [])
         .map((s) => ({ id: s.skill.id, name: s.skill.name }))
         .sort((a, b) => a.name.localeCompare(b.name)),
+      weeklyHours: decimal(i.weeklyHours),
+      overtimeCapHours: decimal(i.overtimeCapHours),
+      costRate: decimal(i.costRate),
+      maxTravelMinutes: i.maxTravelMinutes,
+      externalRef: i.externalRef,
     };
   }
 
   private toDetail(i: Instructor): InstructorDetail {
     return {
       ...this.toRow(i),
-      weeklyHours: i.weeklyHours === null ? null : Number(i.weeklyHours),
-      overtimeCapHours:
-        i.overtimeCapHours === null ? null : Number(i.overtimeCapHours),
-      costRate: i.costRate === null ? null : Number(i.costRate),
-      maxTravelMinutes: i.maxTravelMinutes,
       preferences: i.preferences,
-      externalRef: i.externalRef,
       certificates: (i.certificates ?? []).map(toCertificateView),
       availabilities: i.availabilities ?? [],
       createdAt: i.createdAt,
@@ -520,7 +578,9 @@ export class InstructorsService {
   }
 }
 
-function fullName(i: Pick<Instructor, 'firstName' | 'lastName'>): string {
+export function fullName(
+  i: Pick<Instructor, 'firstName' | 'lastName'>,
+): string {
   return `${i.firstName} ${i.lastName}`;
 }
 

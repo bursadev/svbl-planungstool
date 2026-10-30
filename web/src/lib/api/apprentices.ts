@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import { withQuery } from "./query";
 import type { ApiFetcher } from "./request";
+import { fetchPage, type ListPageParams, type Page } from "./tabular";
 import type { Language, Track } from "../format";
 
 export type ApprenticeStatus = "active" | "finished" | "dropped";
@@ -46,24 +47,45 @@ export type Apprentice = ApprenticeRow & {
   importedAt: string | null;
 };
 
-export type ApprenticeFilters = {
-  /** Matches first or last name. */
+/**
+ * Filters of `GET /apprentices` and its CSV export. The archive scope maps onto the status: active
+ * = `active`, archived = finished or dropped.
+ */
+export type ApprenticeFilters = ListPageParams & {
+  /** Matches first and last name, external id, e-mail, Lehrbetrieb and class, ignoring accents. */
   q?: string;
   vocationalSchoolId?: string;
   cohortId?: string;
   trainingCompanyId?: string;
   track?: Track;
+  language?: Language;
 };
 
+export const APPRENTICES_PATH = "/apprentices";
+
+/** The filters as API query parameters (also for «Gefilterte Ansicht exportieren»). */
+export function apprenticeQuery(filters: ApprenticeFilters = {}): Record<string, string | number | undefined> {
+  return { ...filters };
+}
+
 /**
- * Lernende sorted by last name, then first name. Defaults to the browser client; Server
- * Components pass `serverApiFetch` from `@/lib/api/server`. Read-only: the school export is the source.
+ * Lernende sorted by last name, then first name; all of them unless `page` is set. Defaults to the
+ * browser client; Server Components pass `serverApiFetch` from `@/lib/api/server`. Read-only: the
+ * school export is the source.
  */
 export function listApprentices(
   filters: ApprenticeFilters = {},
   fetcher: ApiFetcher = apiFetch,
 ): Promise<ApprenticeRow[]> {
-  return fetcher<ApprenticeRow[]>(withQuery("/apprentices", filters));
+  return fetcher<ApprenticeRow[]>(withQuery(APPRENTICES_PATH, apprenticeQuery(filters)));
+}
+
+/** One page of Lernende with the total number of matches. */
+export function listApprenticesPage(
+  filters: ApprenticeFilters,
+  fetcher: ApiFetcher = apiFetch,
+): Promise<Page<ApprenticeRow>> {
+  return fetchPage<ApprenticeRow>(withQuery(APPRENTICES_PATH, apprenticeQuery(filters)), fetcher);
 }
 
 /** One Lernende/r with all Stammdaten; throws `ApiError` 404 when the id does not exist. */

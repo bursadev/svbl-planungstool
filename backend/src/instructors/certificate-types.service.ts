@@ -6,12 +6,19 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { CourseType } from '../courses/course-type.entity.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
 import { CertificateTypeMaintenanceCourseType } from './certificate-type-maintenance-course-type.entity.js';
 import { CertificateType } from './certificate-type.entity.js';
 import type {
   CreateCertificateTypeDto,
+  ListCertificateTypesQuery,
   UpdateCertificateTypeDto,
 } from './dto/certificate-type.dto.js';
 
@@ -33,12 +40,35 @@ export class CertificateTypesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(): Promise<CertificateTypeView[]> {
-    const types = await this.types.find({ order: { code: 'ASC' } });
-    const links = await this.maintenance.find({
-      relations: { courseType: true },
-    });
-    return types.map((t) => this.withMaintenance(t, links));
+  /**
+   * Certificate types sorted by code, filtered and (with `page`) paged, with
+   * their maintenance course types. `q` matches code, name and issuer, word
+   * by word and ignoring accents.
+   */
+  async list(
+    query: ListCertificateTypesQuery = {},
+  ): Promise<Page<CertificateTypeView>> {
+    const qb = this.types.createQueryBuilder('c');
+    applySearch(qb, ['c.code', 'c.name', 'c.issuer'], query.q);
+    applyArchive(qb, query.archive, 'c.active');
+    const page = await pageOf(
+      qb,
+      query,
+      { code: 'c.code', name: 'c.name' },
+      'code',
+      'c.id',
+    );
+    const ids = page.items.map((t) => t.id);
+    const links = ids.length
+      ? await this.maintenance.find({
+          where: { certificateTypeId: In(ids) },
+          relations: { courseType: true },
+        })
+      : [];
+    return {
+      items: page.items.map((t) => this.withMaintenance(t, links)),
+      total: page.total,
+    };
   }
 
   async get(id: string): Promise<CertificateTypeView> {

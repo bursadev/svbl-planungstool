@@ -1,12 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
 import { Apprentice } from './apprentice.entity.js';
 import type {
   CreateTrainerDto,
   CreateTrainingCompanyDto,
+  ListTrainingCompaniesQuery,
   UpdateTrainerDto,
   UpdateTrainingCompanyDto,
 } from './dto/training-company.dto.js';
@@ -41,6 +48,7 @@ export interface TrainingCompanyRow {
   email: string | null;
   phone: string | null;
   externalRef: string | null;
+  active: boolean;
   trainerCount: number;
   apprenticeCount: number;
 }
@@ -62,17 +70,36 @@ export class TrainingCompaniesService {
     private readonly audit: AuditService,
   ) {}
 
-  /** All companies; `q` matches name or city. */
-  async list(q?: string): Promise<TrainingCompanyRow[]> {
-    const where = q
-      ? [{ name: ILike(`%${q}%`) }, { city: ILike(`%${q}%`) }]
-      : undefined;
-    const companies = await this.companies.find({
-      where,
-      order: { name: 'ASC' },
-    });
-    const counts = await this.counts();
-    return companies.map((company) => this.toRow(company, counts));
+  /**
+   * Companies with their trainer and apprentice counts, filtered and (with
+   * `page`) paged; the total goes into `X-Total-Count`. `q` matches name,
+   * city, postal code, e-mail and external ref, word by word and ignoring
+   * accents.
+   */
+  async list(
+    query: ListTrainingCompaniesQuery = {},
+  ): Promise<Page<TrainingCompanyRow>> {
+    const qb = this.companies.createQueryBuilder('c');
+    applySearch(
+      qb,
+      ['c.name', 'c.city', 'c.postalCode', 'c.email', 'c.externalRef'],
+      query.q,
+    );
+    applyArchive(qb, query.archive, 'c.active');
+    const page = await pageOf(
+      qb,
+      query,
+      { name: 'c.name', city: 'c.city' },
+      'name',
+      'c.id',
+    );
+    const counts = await this.counts(
+      query.page ? page.items.map((c) => c.id) : undefined,
+    );
+    return {
+      items: page.items.map((company) => this.toRow(company, counts)),
+      total: page.total,
+    };
   }
 
   async get(id: string): Promise<TrainingCompanyView> {
@@ -81,7 +108,7 @@ export class TrainingCompaniesService {
       where: { trainingCompanyId: id },
       order: { lastName: 'ASC', firstName: 'ASC' },
     });
-    const counts = await this.counts(id);
+    const counts = await this.counts([id]);
     return {
       ...this.toRow(company, counts),
       trainers: trainers.map((trainer) => toTrainerView(trainer, counts)),
@@ -182,7 +209,7 @@ export class TrainingCompaniesService {
       after: snapshot(trainer),
       summary: `hat Berufsbildner «${trainer.firstName} ${trainer.lastName}» bei ${company.name} angelegt`,
     });
-    return toTrainerView(trainer, await this.counts(companyId));
+    return toTrainerView(trainer, await this.counts([companyId]));
   }
 
   async updateTrainer(
@@ -203,7 +230,10 @@ export class TrainingCompaniesService {
       after: snapshot(trainer),
       summary: `hat Berufsbildner «${trainer.firstName} ${trainer.lastName}» geändert`,
     });
-    return toTrainerView(trainer, await this.counts(trainer.trainingCompanyId));
+    return toTrainerView(
+      trainer,
+      await this.counts([trainer.trainingCompanyId]),
+    );
   }
 
   async removeTrainer(id: string, actor: AuthUser): Promise<void> {
@@ -233,15 +263,23 @@ export class TrainingCompaniesService {
     return trainer;
   }
 
-  /** Trainers per company plus active apprentices per company and per trainer. */
-  private async counts(companyId?: string): Promise<Counts> {
+  /** Trainers per company plus active apprentices per company and per trainer; all companies without `companyIds`. */
+  private async counts(companyIds?: string[]): Promise<Counts> {
+    const counts: Counts = {
+      trainersPerCompany: new Map(),
+      apprenticesPerCompany: new Map(),
+      apprenticesPerTrainer: new Map(),
+    };
+    if (companyIds && !companyIds.length) return counts;
     const trainerQb = this.trainers
       .createQueryBuilder('t')
       .select('t.trainingCompanyId', 'companyId')
       .addSelect('COUNT(*)', 'n')
       .groupBy('t.trainingCompanyId');
-    if (companyId) {
-      trainerQb.where('t.trainingCompanyId = :companyId', { companyId });
+    if (companyIds) {
+      trainerQb.where('t.trainingCompanyId IN (:...companyIds)', {
+        companyIds,
+      });
     }
     const apprenticeQb = this.apprentices
       .createQueryBuilder('a')
@@ -252,8 +290,10 @@ export class TrainingCompaniesService {
       .andWhere('a.trainingCompanyId IS NOT NULL')
       .groupBy('a.trainingCompanyId')
       .addGroupBy('a.trainerId');
-    if (companyId) {
-      apprenticeQb.andWhere('a.trainingCompanyId = :companyId', { companyId });
+    if (companyIds) {
+      apprenticeQb.andWhere('a.trainingCompanyId IN (:...companyIds)', {
+        companyIds,
+      });
     }
     const [trainerRows, apprenticeRows] = await Promise.all([
       trainerQb.getRawMany<{ companyId: string; n: string }>(),
@@ -263,11 +303,6 @@ export class TrainingCompaniesService {
         n: string;
       }>(),
     ]);
-    const counts: Counts = {
-      trainersPerCompany: new Map(),
-      apprenticesPerCompany: new Map(),
-      apprenticesPerTrainer: new Map(),
-    };
     for (const row of trainerRows) {
       counts.trainersPerCompany.set(row.companyId, Number(row.n));
     }
@@ -297,6 +332,7 @@ export class TrainingCompaniesService {
       email: company.email,
       phone: company.phone,
       externalRef: company.externalRef,
+      active: company.active,
       trainerCount: counts.trainersPerCompany.get(company.id) ?? 0,
       apprenticeCount: counts.apprenticesPerCompany.get(company.id) ?? 0,
     };

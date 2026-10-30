@@ -5,7 +5,7 @@ import { PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CourseTypeDialog } from "./course-type-dialog";
 
-/** «Kurstyp anlegen» above the card grid; opens the create dialog. */
+/** «Kurstyp anlegen» next to the CSV menu; opens the create dialog. */
 export function CreateCourseTypeButton() {
   const [open, setOpen] = useState(false);
   return (

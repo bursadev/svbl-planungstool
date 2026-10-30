@@ -4,8 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { Location } from '../locations/location.entity.js';
 import { AuditService, snapshot } from '../system/audit.service.js';
 import { Apprentice } from './apprentice.entity.js';
@@ -13,6 +19,7 @@ import type {
   CreateSchoolClassDto,
   CreateSchoolHolidayDto,
   CreateVocationalSchoolDto,
+  ListVocationalSchoolsQuery,
   ReplaceSchoolClassDaysDto,
   UpdateSchoolClassDto,
   UpdateSchoolHolidayDto,
@@ -73,23 +80,68 @@ export class SchoolsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(): Promise<VocationalSchoolView[]> {
-    const schools = await this.schools.find({
-      relations: { nearestLocation: true },
-      order: { name: 'ASC' },
-    });
-    const classes = await this.classes.find({
-      relations: { days: true },
-      order: { startYear: 'DESC', code: 'ASC', days: { weekday: 'ASC' } },
-    });
-    const counts = await this.apprenticeCounts();
-    return schools.map((s) =>
-      this.toView(
-        s,
-        classes.filter((c) => c.vocationalSchoolId === s.id),
-        counts,
-      ),
+  /**
+   * Schools with their classes, filtered and (with `page`) paged; the total
+   * goes into `X-Total-Count`. `q` matches name, short name, address, city,
+   * canton, contact and the ÜK-Standort, word by word and ignoring accents.
+   */
+  async list(
+    query: ListVocationalSchoolsQuery = {},
+  ): Promise<Page<VocationalSchoolView>> {
+    const qb = this.schools
+      .createQueryBuilder('s')
+      .leftJoinAndSelect('s.nearestLocation', 'loc');
+    applySearch(
+      qb,
+      [
+        's.name',
+        's.shortName',
+        's.addressLine',
+        's.postalCode',
+        's.city',
+        's.canton',
+        's.contactName',
+        's.contactEmail',
+        'loc.code',
+        'loc.name',
+      ],
+      query.q,
     );
+    applyArchive(qb, query.archive, 's.active');
+    if (query.language) {
+      qb.andWhere('s.language = :language', { language: query.language });
+    }
+    if (query.nearestLocationId) {
+      qb.andWhere('s.nearestLocationId = :nearestLocationId', {
+        nearestLocationId: query.nearestLocationId,
+      });
+    }
+    const page = await pageOf(
+      qb,
+      query,
+      { name: 's.name', shortName: 's.shortName', location: 'loc.name' },
+      'name',
+      's.id',
+    );
+    const ids = page.items.map((s) => s.id);
+    const classes = ids.length
+      ? await this.classes.find({
+          where: { vocationalSchoolId: In(ids) },
+          relations: { days: true },
+          order: { startYear: 'DESC', code: 'ASC', days: { weekday: 'ASC' } },
+        })
+      : [];
+    const counts = await this.apprenticeCounts();
+    return {
+      total: page.total,
+      items: page.items.map((s) =>
+        this.toView(
+          s,
+          classes.filter((c) => c.vocationalSchoolId === s.id),
+          counts,
+        ),
+      ),
+    };
   }
 
   async get(id: string): Promise<VocationalSchoolView> {
@@ -339,7 +391,7 @@ export class SchoolsService {
 
   private async getClass(id: string): Promise<SchoolClassView> {
     const cls = await this.loadClass(id);
-    const counts = await this.apprenticeCounts();
+    const counts = await this.apprenticeCounts(cls.vocationalSchoolId);
     return toClassView(cls, counts.classes.get(id) ?? 0);
   }
 

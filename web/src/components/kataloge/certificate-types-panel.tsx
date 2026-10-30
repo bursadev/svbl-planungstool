@@ -5,15 +5,26 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 import { toast } from "sonner";
-import { DataTable, DataTableCell, DataTableEmpty, DataTableHead } from "@/components/data/data-table";
+import {
+  ActiveBadge,
+  BulkBar,
+  DataTable,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  SelectAllHead,
+  SelectCell,
+  SelectionProvider,
+} from "@/components/data";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteCertificateType, type CertificateType } from "@/lib/api/certificate-types";
+import { CERTIFICATE_TYPES_PATH, deleteCertificateType, type CertificateType } from "@/lib/api/certificate-types";
 import { ApiError } from "@/lib/api/client";
+import { CatalogToolbar } from "./catalog-toolbar";
 import { CertificateTypeDialog } from "./certificate-type-dialog";
 
-const COLUMNS = 7;
+const COLUMNS = 9;
 
 /** «5 Jahre» or «läuft nicht ab». */
 function formatValidity(years: number | null): string {
@@ -37,10 +48,16 @@ type CertificateTypesPanelProps = {
   types: CertificateType[];
   /** Kurstypen for the dialog's picker; `null` when they could not be loaded. */
   courseTypes: Pick<CourseType, "id" | "code" | "name">[] | null;
+  /** API filters of the view, for the filtered CSV export. */
+  filters: Record<string, string | undefined>;
+  filtered: boolean;
 };
 
-/** Tab «Zertifikatstypen»: table with per-row edit and delete, plus «Zertifikatstyp anlegen». */
-export function CertificateTypesPanel({ types, courseTypes }: CertificateTypesPanelProps) {
+/**
+ * Tab «Zertifikatstypen»: toolbar with search, archive filter and CSV, a selectable table for bulk
+ * archive / restore / delete, and per-row edit and delete.
+ */
+export function CertificateTypesPanel({ types, courseTypes, filters, filtered }: CertificateTypesPanelProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CertificateType | undefined>();
@@ -76,67 +93,81 @@ export function CertificateTypesPanel({ types, courseTypes }: CertificateTypesPa
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {types.length} {types.length === 1 ? "Zertifikatstyp" : "Zertifikatstypen"}
-        </p>
-        <Button variant="outline" size="sm" onClick={openCreate}>
+      <CatalogToolbar
+        basePath={CERTIFICATE_TYPES_PATH}
+        plural="Zertifikatstypen"
+        searchPlaceholder="Code, Name, Aussteller"
+        filters={filters}
+        filtered={filtered}
+      >
+        <Button onClick={openCreate}>
           <PlusIcon data-icon="inline-start" />
           Zertifikatstyp anlegen
         </Button>
-      </div>
+      </CatalogToolbar>
 
-      <DataTable>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <DataTableHead>Code</DataTableHead>
-            <DataTableHead>Name</DataTableHead>
-            <DataTableHead>Aussteller</DataTableHead>
-            <DataTableHead>Gültigkeit</DataTableHead>
-            <DataTableHead>Warnfrist</DataTableHead>
-            <DataTableHead>Qualifikationspflege</DataTableHead>
-            <DataTableHead className="w-0">
-              <span className="sr-only">Aktionen</span>
-            </DataTableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {types.length === 0 ? (
-            <DataTableEmpty colSpan={COLUMNS}>Noch keine Zertifikatstypen erfasst.</DataTableEmpty>
-          ) : (
-            types.map((type) => {
-              const maintenance = formatMaintenance(type);
-              return (
-                <TableRow key={type.id}>
-                  <DataTableCell className="font-mono">{type.code}</DataTableCell>
-                  <DataTableCell className="font-medium">{type.name}</DataTableCell>
-                  <DataTableCell>{type.issuer ?? <span className="text-muted-foreground">–</span>}</DataTableCell>
-                  <DataTableCell className={type.validityYears === null ? "text-muted-foreground" : undefined}>
-                    {formatValidity(type.validityYears)}
-                  </DataTableCell>
-                  <DataTableCell>{formatWarning(type.warningLeadDays)}</DataTableCell>
-                  <DataTableCell>{maintenance ?? <span className="text-muted-foreground">–</span>}</DataTableCell>
-                  <DataTableCell className="py-1.5 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="xs" onClick={() => openEdit(type)}>
-                        Bearbeiten
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => openDelete(type)}
-                      >
-                        Löschen
-                      </Button>
-                    </div>
-                  </DataTableCell>
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </DataTable>
+      <SelectionProvider ids={types.map((type) => type.id)}>
+        <BulkBar basePath={CERTIFICATE_TYPES_PATH} plural="Zertifikatstypen" />
+        <DataTable>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <SelectAllHead />
+              <DataTableHead>Code</DataTableHead>
+              <DataTableHead>Name</DataTableHead>
+              <DataTableHead>Aussteller</DataTableHead>
+              <DataTableHead>Gültigkeit</DataTableHead>
+              <DataTableHead>Warnfrist</DataTableHead>
+              <DataTableHead>Qualifikationspflege</DataTableHead>
+              <DataTableHead>Status</DataTableHead>
+              <DataTableHead className="w-0">
+                <span className="sr-only">Aktionen</span>
+              </DataTableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {types.length === 0 ? (
+              <DataTableEmpty colSpan={COLUMNS}>
+                {filtered ? "Keine Zertifikatstypen gefunden." : "Noch keine Zertifikatstypen erfasst."}
+              </DataTableEmpty>
+            ) : (
+              types.map((type) => {
+                const maintenance = formatMaintenance(type);
+                return (
+                  <TableRow key={type.id}>
+                    <SelectCell id={type.id} label={type.name} />
+                    <DataTableCell className="font-mono">{type.code}</DataTableCell>
+                    <DataTableCell className="font-medium">{type.name}</DataTableCell>
+                    <DataTableCell>{type.issuer ?? <span className="text-muted-foreground">–</span>}</DataTableCell>
+                    <DataTableCell className={type.validityYears === null ? "text-muted-foreground" : undefined}>
+                      {formatValidity(type.validityYears)}
+                    </DataTableCell>
+                    <DataTableCell>{formatWarning(type.warningLeadDays)}</DataTableCell>
+                    <DataTableCell>{maintenance ?? <span className="text-muted-foreground">–</span>}</DataTableCell>
+                    <DataTableCell>
+                      <ActiveBadge active={type.active} />
+                    </DataTableCell>
+                    <DataTableCell className="py-1.5 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="xs" onClick={() => openEdit(type)}>
+                          Bearbeiten
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => openDelete(type)}
+                        >
+                          Löschen
+                        </Button>
+                      </div>
+                    </DataTableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </DataTable>
+      </SelectionProvider>
 
       <CertificateTypeDialog
         open={dialogOpen}

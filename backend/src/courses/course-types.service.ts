@@ -6,6 +6,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import {
+  applyArchive,
+  applySearch,
+  pageOf,
+  type Page,
+} from '../common/list-query.js';
 import { CurriculumModule } from '../curriculum/curriculum-module.entity.js';
 import { DeviceType } from '../devices/device-type.entity.js';
 import { CertificateType } from '../instructors/certificate-type.entity.js';
@@ -17,6 +23,7 @@ import { CourseTypeSkill } from './course-type-skill.entity.js';
 import { CourseType } from './course-type.entity.js';
 import type {
   CreateCourseTypeDto,
+  ListCourseTypesQuery,
   ReplaceRequirementsDto,
   UpdateCourseTypeDto,
 } from './dto/course-type.dto.js';
@@ -69,15 +76,47 @@ export class CourseTypesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(): Promise<CourseTypeView[]> {
-    const types = await this.types.find({
-      relations: this.relations,
-      order: { code: 'ASC' },
-    });
-    const modules = await this.modules.find();
-    return types.map((t) =>
-      this.toView(t, modules.find((m) => m.courseTypeId === t.id) ?? null),
+  /**
+   * Course types with requirements and curriculum slot, filtered and (with
+   * `page`) paged; the total goes into `X-Total-Count`. `q` matches code,
+   * name and description, word by word and ignoring accents.
+   */
+  async list(query: ListCourseTypesQuery = {}): Promise<Page<CourseTypeView>> {
+    const qb = this.types
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.requiredSkills', 'rs')
+      .leftJoinAndSelect('rs.skill', 'skill')
+      .leftJoinAndSelect('t.requiredCertificates', 'rc')
+      .leftJoinAndSelect('rc.certificateType', 'certificateType')
+      .leftJoinAndSelect('t.requiredDevices', 'rd')
+      .leftJoinAndSelect('rd.deviceType', 'deviceType');
+    applySearch(qb, ['t.code', 't.name', 't.description'], query.q);
+    applyArchive(qb, query.archive, 't.active');
+    if (query.kind) qb.andWhere('t.kind = :kind', { kind: query.kind });
+    if (query.track === 'none') qb.andWhere('t.track IS NULL');
+    else if (query.track) {
+      qb.andWhere('t.track = :track', { track: query.track });
+    }
+    if (query.language) {
+      qb.andWhere(':language = ANY(t.languages)', { language: query.language });
+    }
+    const page = await pageOf(
+      qb,
+      query,
+      { code: 't.code', name: 't.name', duration: 't.durationDays' },
+      'code',
+      't.id',
     );
+    const modules = page.items.length
+      ? await this.modules.findBy({
+          courseTypeId: In(page.items.map((t) => t.id)),
+        })
+      : [];
+    const moduleOf = new Map(modules.map((m) => [m.courseTypeId, m]));
+    return {
+      items: page.items.map((t) => this.toView(t, moduleOf.get(t.id) ?? null)),
+      total: page.total,
+    };
   }
 
   async get(id: string): Promise<CourseTypeView> {

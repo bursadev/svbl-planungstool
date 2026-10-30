@@ -30,4 +30,8 @@ export class CertificateType extends BaseEntity {
    */
   @Column({ type: 'smallint', nullable: true })
   maintenanceMinPerYear: number | null;
+
+  /** False once archived: hidden from lists and pickers, kept for history. */
+  @Column({ type: 'boolean', default: true })
+  active: boolean;
 }

@@ -4,13 +4,23 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { DataTable, DataTableCell, DataTableEmpty, DataTableHead } from "@/components/data/data-table";
-import { LinkRow } from "@/components/data/link-row";
-import { StatusDot } from "@/components/data/status-dot";
+import {
+  BulkBar,
+  DataTable,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  LinkRow,
+  SelectAllHead,
+  SelectCell,
+  SelectionProvider,
+  SortableHead,
+  StatusDot,
+} from "@/components/data";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { ApiError } from "@/lib/api/client";
-import { deleteDevice, getDevice, type DeviceRow } from "@/lib/api/devices";
+import { DEVICES_PATH, deleteDevice, type DeviceRow } from "@/lib/api/devices";
 import { formatDate } from "@/lib/format";
 import { DEVICE_MOBILITY_LABELS, DEVICE_STATUS_LABELS } from "@/lib/labels";
 import { DeviceDialog, type EditableDevice } from "./device-dialog";
@@ -19,7 +29,7 @@ import { DEVICE_STATUS_TONES, type PickerOption } from "./labels";
 import { MaintenanceDialog } from "./maintenance-dialog";
 import { MoveDialog } from "./move-dialog";
 
-const COLUMNS = 7;
+const COLUMNS = 8;
 
 type DialogKind = "edit" | "move" | "maintenance" | "delete";
 
@@ -48,7 +58,10 @@ type DevicesTableProps = {
   locations: PickerOption[];
 };
 
-/** The `/geraete` list; rows link to the detail page, the «Aktionen» menu opens the dialogs. */
+/**
+ * The `/geraete` list with row selection for bulk actions; rows link to the detail page, the
+ * «Aktionen» menu opens the dialogs for one device.
+ */
 export function DevicesTable({ devices, deviceTypes, locations }: DevicesTableProps) {
   const router = useRouter();
   // One dialog of each kind for the whole table; the target stays while a dialog closes.
@@ -61,14 +74,9 @@ export function DevicesTable({ devices, deviceTypes, locations }: DevicesTablePr
     setDialog(kind);
   }
 
-  /** The list row has no notes, so the detail is loaded first; editing must not wipe them. */
-  async function openEdit(device: DeviceRow) {
-    try {
-      setEditTarget(await getDevice(device.id));
-      setDialog("edit");
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Unerwarteter Fehler.");
-    }
+  function openEdit(device: DeviceRow) {
+    setEditTarget(device);
+    setDialog("edit");
   }
 
   function closeIf(kind: DialogKind) {
@@ -90,13 +98,22 @@ export function DevicesTable({ devices, deviceTypes, locations }: DevicesTablePr
   }
 
   return (
-    <>
+    <SelectionProvider ids={devices.map((device) => device.id)}>
+      <BulkBar basePath={DEVICES_PATH} plural="Geräte" />
       <DataTable>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <DataTableHead>Inventar</DataTableHead>
-            <DataTableHead>Typ</DataTableHead>
-            <DataTableHead>Standort heute</DataTableHead>
+            <SelectAllHead />
+            <SortableHead sortKey="inventoryNumber" defaultSort="inventoryNumber">
+              Inventar
+            </SortableHead>
+            <SortableHead sortKey="type" defaultSort="inventoryNumber">
+              Typ
+            </SortableHead>
+            {/* Sorted by home location; the cell shows where the device is today. */}
+            <SortableHead sortKey="location" defaultSort="inventoryNumber">
+              Standort heute
+            </SortableHead>
             <DataTableHead>Mobilität</DataTableHead>
             <DataTableHead>Status</DataTableHead>
             <DataTableHead>Zeitraum / Bewegung</DataTableHead>
@@ -115,6 +132,7 @@ export function DevicesTable({ devices, deviceTypes, locations }: DevicesTablePr
               const away = device.currentLocation.id !== device.homeLocation.id;
               return (
                 <LinkRow key={device.id} href={href}>
+                  <SelectCell id={device.id} label={device.inventoryNumber} />
                   <DataTableCell>
                     <Link
                       href={href}
@@ -143,7 +161,7 @@ export function DevicesTable({ devices, deviceTypes, locations }: DevicesTablePr
                   <DataTableCell className="py-1.5 text-right" onClick={(event) => event.stopPropagation()}>
                     <DeviceRowMenu
                       device={device}
-                      onEdit={() => void openEdit(device)}
+                      onEdit={() => openEdit(device)}
                       onMove={() => open("move", device)}
                       onMaintenance={() => open("maintenance", device)}
                       onDelete={() => open("delete", device)}
@@ -172,6 +190,6 @@ export function DevicesTable({ devices, deviceTypes, locations }: DevicesTablePr
         description="Das Gerät wird dauerhaft gelöscht, zusammen mit seinen Verschiebungen und Wartungsfenstern."
         onConfirm={handleDelete}
       />
-    </>
+    </SelectionProvider>
   );
 }

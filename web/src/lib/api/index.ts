@@ -25,3 +25,4 @@ export * from "./training-companies";
 export * from "./customers";
 export * from "./users";
 export * from "./settings";
+export * from "./tabular";

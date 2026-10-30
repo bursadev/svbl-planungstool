@@ -125,8 +125,11 @@ export function deleteCohort(id: string, fetcher: ApiFetcher = apiFetch): Promis
 
 // --- Time windows ---------------------------------------------------------------------------
 
+/** Base path of the time windows: CSV export (`?cohortId=`), template, import and bulk delete. */
+export const TIME_WINDOWS_PATH = "/time-windows";
+
 export function listTimeWindows(cohortId?: string, fetcher: ApiFetcher = apiFetch): Promise<TimeWindow[]> {
-  return fetcher<TimeWindow[]>(withQuery("/time-windows", { cohortId }));
+  return fetcher<TimeWindow[]>(withQuery(TIME_WINDOWS_PATH, { cohortId }));
 }
 
 export function createTimeWindow(dto: CreateTimeWindow, fetcher: ApiFetcher = apiFetch): Promise<TimeWindow> {

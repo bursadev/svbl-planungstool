@@ -14,6 +14,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { ListPageQuery } from '../../common/list-query.js';
 import { IsDateOnly } from '../../common/validators.js';
 import { Language, Track } from '../../database/enums.js';
 
@@ -69,6 +70,22 @@ export class CreateVocationalSchoolDto {
 export class UpdateVocationalSchoolDto extends PartialType(
   CreateVocationalSchoolDto,
 ) {}
+
+/** Filters of GET /vocational-schools (and its CSV export); all optional. */
+export class ListVocationalSchoolsQuery extends ListPageQuery {
+  /** Words matched against name, short name, address, city, canton, contact and ÜK-Standort. */
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsEnum(Language)
+  language?: Language;
+
+  @IsOptional()
+  @IsUUID()
+  nearestLocationId?: string;
+}
 
 export class CreateSchoolClassDto {
   @IsString()
