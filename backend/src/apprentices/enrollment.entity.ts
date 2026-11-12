@@ -1,5 +1,4 @@
 import {
-  Check,
   Column,
   Entity,
   Index,
@@ -10,7 +9,6 @@ import {
   type Relation,
 } from 'typeorm';
 import { Course } from '../courses/course.entity.js';
-import { Participant } from '../customers/participant.entity.js';
 import { BaseEntity } from '../database/base.entity.js';
 import {
   ENROLLMENT_CHANNEL_ENUM,
@@ -22,13 +20,11 @@ import { User } from '../users/user.entity.js';
 import { Apprentice } from './apprentice.entity.js';
 import { Attendance } from './attendance.entity.js';
 
-/** Kursanmeldung: an apprentice or adult participant booked into a course; a no-show gets a follow-up enrollment. */
+/** Kursanmeldung: an apprentice booked into a course; a no-show gets a follow-up enrollment. */
 @Entity()
 @Unique(['courseId', 'apprenticeId'])
-@Unique(['courseId', 'participantId'])
 @Index(['apprenticeId'])
 @Index(['courseId'])
-@Check('num_nonnulls("apprentice_id", "participant_id") = 1')
 export class Enrollment extends BaseEntity {
   @Column('uuid')
   courseId: string;
@@ -39,23 +35,14 @@ export class Enrollment extends BaseEntity {
   @JoinColumn({ name: 'course_id' })
   course: Relation<Course>;
 
-  /** Exactly one of apprenticeId / participantId is set. */
-  @Column({ type: 'uuid', nullable: true })
-  apprenticeId: string | null;
+  @Column('uuid')
+  apprenticeId: string;
 
   @ManyToOne(() => Apprentice, (apprentice) => apprentice.enrollments, {
-    nullable: true,
     onDelete: 'RESTRICT',
   })
   @JoinColumn({ name: 'apprentice_id' })
-  apprentice: Relation<Apprentice> | null;
-
-  @Column({ type: 'uuid', nullable: true })
-  participantId: string | null;
-
-  @ManyToOne(() => Participant, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'participant_id' })
-  participant: Relation<Participant> | null;
+  apprentice: Relation<Apprentice>;
 
   @Column({
     type: 'enum',

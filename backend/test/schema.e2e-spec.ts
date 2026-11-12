@@ -144,15 +144,6 @@ describe('Schema', () => {
       ).rejects.toThrow(/unique/i);
     });
 
-    it('requires exactly one of apprentice or participant on an enrollment', async () => {
-      const loc = await location('T1');
-      const { courseId } = await courseWithDay(loc);
-      await expect(
-        qr.query(`INSERT INTO "enrollment" (course_id) VALUES ($1)`, [
-          courseId,
-        ]),
-      ).rejects.toThrow(/check constraint/i);
-    });
 
     it('keeps a device qualification to one of certificate or skill', async () => {
       const [type] = await qr.query(

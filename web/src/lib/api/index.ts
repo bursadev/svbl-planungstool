@@ -22,7 +22,6 @@ export * from "./curriculum";
 export * from "./vocational-schools";
 export * from "./apprentices";
 export * from "./training-companies";
-export * from "./customers";
 export * from "./users";
 export * from "./settings";
 export * from "./tabular";

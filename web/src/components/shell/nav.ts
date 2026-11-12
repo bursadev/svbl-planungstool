@@ -19,7 +19,6 @@ const PLANNING_NAV: NavGroup[] = [
       { label: "Ausbilder", href: "/ausbilder" },
       { label: "Lernende", href: "/lernende" },
       { label: "Berufsschulen", href: "/berufsschulen" },
-      { label: "Kunden", href: "/kunden" },
       { label: "Standorte", href: "/standorte" },
       { label: "Geräte", href: "/geraete" },
       { label: "Kataloge", href: "/kataloge" },

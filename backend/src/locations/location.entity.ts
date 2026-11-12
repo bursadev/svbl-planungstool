@@ -1,12 +1,9 @@
 import {
   Column,
   Entity,
-  JoinColumn,
-  ManyToOne,
   OneToMany,
   type Relation,
 } from 'typeorm';
-import { Customer } from '../customers/customer.entity.js';
 import { BaseEntity } from '../database/base.entity.js';
 import {
   LANGUAGE_ENUM,
@@ -62,14 +59,6 @@ export class Location extends BaseEntity {
 
   @Column({ type: 'boolean', default: true })
   active: boolean;
-
-  /** Set for customer sites: the customer the site belongs to. */
-  @Column({ type: 'uuid', nullable: true })
-  customerId: string | null;
-
-  @ManyToOne(() => Customer, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'customer_id' })
-  customer: Relation<Customer> | null;
 
   @OneToMany(() => Room, (room) => room.location)
   rooms: Relation<Room>[];

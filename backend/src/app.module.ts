@@ -4,7 +4,6 @@ import { ApprenticesModule } from './apprentices/apprentices.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { CurriculumDomainModule } from './curriculum/curriculum.module.js';
-import { CustomersModule } from './customers/customers.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DevicesModule } from './devices/devices.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -30,7 +29,6 @@ import { UsersModule } from './users/users.module.js';
     CoursesModule,
     CurriculumDomainModule,
     ApprenticesModule,
-    CustomersModule,
     PlanningModule,
     SystemModule,
   ],

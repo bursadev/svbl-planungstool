@@ -27,7 +27,7 @@ pnpm start:dev         # http://localhost:3001
 
 `synchronize` is off, so schema changes always go through migrations. Entities are picked up automatically from any `*.entity.ts` file under `src/`. Connection settings are shared between the app and the TypeORM CLI in `src/database/database.options.ts`.
 
-The schema is described in `docs/superpowers/specs/2026-10-01-data-model-design.md` (47 tables, one Nest module per cluster: `users`, `locations`, `devices`, `instructors`, `courses`, `curriculum`, `apprentices`, `customers`, `planning`, `system`). Table and column names are snake_case through `SnakeNamingStrategy`; shared enums live in `src/database/enums.ts`.
+The schema is described in `docs/superpowers/specs/2026-10-01-data-model-design.md` (45 tables since the Kunden module was dropped on 2026-11-12, one Nest module per cluster: `users`, `locations`, `devices`, `instructors`, `courses`, `curriculum`, `apprentices`, `planning`, `system`). Table and column names are snake_case through `SnakeNamingStrategy`; shared enums live in `src/database/enums.ts`.
 
 After `migration:generate`, check the file for duplicate `CREATE TYPE` / `DROP TYPE` statements: TypeORM emits one per table that uses a shared enum (`enumName`), and the second one fails at run time. Keep the first `CREATE TYPE` and the last `DROP TYPE` per enum. `pnpm test:e2e` contains a round-trip test that fails when entities and migrations drift apart.
 

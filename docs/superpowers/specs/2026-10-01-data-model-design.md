@@ -193,6 +193,8 @@ Column lists name the columns beyond `id`, `created_at`, `updated_at`. `→` mar
 
 ### customers
 
+> Removed on 2026-11-12: the tool plans üK only. `customer` and `participant` were dropped (migration `DropCustomers`), `location.customer_id` and `enrollment.participant_id` with them; an enrollment is always an apprentice. Adult and exam courses stay as blockers of instructors and rooms.
+
 **customer** — `name` text · address fields nullable · contact fields nullable · `external_ref_abacus` text nullable · `external_ref_odaorg` text nullable · `active` bool default true
 
 **participant** — `customer_id` → customer nullable · `first_name` text · `last_name` text · `email` text nullable · `phone` text nullable · `language` language · `notes` text nullable

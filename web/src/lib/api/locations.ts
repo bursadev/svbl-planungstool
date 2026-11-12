@@ -33,7 +33,6 @@ export type Location = {
   contactEmail: string | null;
   contactPhone: string | null;
   active: boolean;
-  customerId: string | null;
   rooms: Room[];
   createdAt: string;
   updatedAt: string;
@@ -54,7 +53,6 @@ export type CreateLocation = {
   contactEmail?: string | null;
   contactPhone?: string | null;
   active?: boolean;
-  customerId?: string | null;
 };
 
 export type UpdateLocation = Partial<CreateLocation>;

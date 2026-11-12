@@ -8,7 +8,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
 } from 'class-validator';
 import { ListPageQuery } from '../../common/list-query.js';
@@ -70,9 +69,6 @@ export class CreateLocationDto {
   @IsBoolean()
   active?: boolean;
 
-  @IsOptional()
-  @IsUUID()
-  customerId?: string | null;
 }
 
 export class UpdateLocationDto extends PartialType(CreateLocationDto) {}

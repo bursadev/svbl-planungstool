@@ -18,8 +18,6 @@ import { Cohort } from '../curriculum/cohort.entity.js';
 import { CurriculumModulePrerequisite } from '../curriculum/curriculum-module-prerequisite.entity.js';
 import { CurriculumModule } from '../curriculum/curriculum-module.entity.js';
 import { TimeWindow } from '../curriculum/time-window.entity.js';
-import { Customer } from '../customers/customer.entity.js';
-import { Participant } from '../customers/participant.entity.js';
 import { DeviceMove } from '../devices/device-move.entity.js';
 import { DeviceReservation } from '../devices/device-reservation.entity.js';
 import { DeviceTypeQualification } from '../devices/device-type-qualification.entity.js';
@@ -89,8 +87,6 @@ export const ALL_ENTITIES = [
   Apprentice,
   Enrollment,
   Attendance,
-  Customer,
-  Participant,
   PlanningRun,
   Demand,
   Alert,
