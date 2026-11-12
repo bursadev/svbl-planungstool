@@ -14,9 +14,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.9.1
         version: 5.9.1(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.89.0(@types/react@19.3.0)(react@19.2.8))(zod@4.6.5)
-      '@userback/widget':
-        specifier: ^0.3.13
-        version: 0.3.13
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1729,9 +1726,6 @@ packages:
     resolution: {integrity: sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA==}
     cpu: [x64]
     os: [win32]
-
-  '@userback/widget@0.3.13':
-    resolution: {integrity: sha512-L2EKTwBHu2ZBQsi12SN6CKl5dwYhxfjC88MSFVdROffaP6Cs/dQJI+SRSwjEuFRKN8zDtp8XwPhxgGLLsdtYXw==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -5526,8 +5520,6 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
-
-  '@userback/widget@0.3.13': {}
 
   accepts@2.0.0:
     dependencies:

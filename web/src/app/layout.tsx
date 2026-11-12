@@ -3,7 +3,6 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthTokenBridge } from "@/components/auth-token-bridge";
-import { UserbackWidget } from "@/components/userback-widget";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -35,7 +34,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <AuthTokenBridge />
             {children}
             <Toaster position="bottom-center" theme="light" />
-            <UserbackWidget />
           </TooltipProvider>
         </body>
       </html>
