@@ -65,7 +65,9 @@ function groupBy<T, K>(rows: T[], key: (row: T) => K): Map<K, T[]> {
  * of the calendar years the range touches (the maintenance rule counts per
  * year), availabilities around the range, active apprentices with the school
  * days of the range's school year (`includeApprentices: false` skips the
- * apprentice side for staffing checks of single courses).
+ * apprentice side for staffing checks of single courses). Draft enrollments
+ * of uncommitted runs count neither as coverage nor as bookings; the run
+ * that owns them loads its snapshot after deleting them.
  */
 @Injectable()
 export class SnapshotService {
@@ -167,16 +169,22 @@ export class SnapshotService {
         : Promise.resolve([] as Course[]),
       courseIds.length
         ? (this.ds.query(
-            `SELECT course_id, apprentice_id FROM enrollment
-             WHERE status IN ('registered', 'confirmed') AND course_id = ANY($1)`,
+            `SELECT e.course_id, e.apprentice_id FROM enrollment e
+             LEFT JOIN planning_run r ON r.id = e.planning_run_id
+             WHERE e.status IN ('registered', 'confirmed') AND e.course_id = ANY($1)
+               AND (e.planning_run_id IS NULL OR r.status = 'committed')`,
             [courseIds],
           ) as Promise<{ course_id: string; apprentice_id: string }[]>)
         : Promise.resolve([]),
       withApprentices
         ? (this.ds.query(
             `SELECT DISTINCT e.apprentice_id, c.course_type_id
-             FROM enrollment e JOIN course c ON c.id = e.course_id
-             WHERE e.status IN ('registered', 'confirmed', 'attended') AND c.status <> 'cancelled'`,
+             FROM enrollment e
+             JOIN course c ON c.id = e.course_id
+             LEFT JOIN planning_run r ON r.id = e.planning_run_id
+             WHERE e.status IN ('registered', 'confirmed', 'attended')
+               AND c.status NOT IN ('cancelled', 'demand')
+               AND (e.planning_run_id IS NULL OR r.status = 'committed')`,
           ) as Promise<{ apprentice_id: string; course_type_id: string }[]>)
         : Promise.resolve(
             [] as { apprentice_id: string; course_type_id: string }[],

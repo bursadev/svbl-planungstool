@@ -390,6 +390,36 @@ describe('Planning runs (e2e)', () => {
       );
     expect(secondIds).not.toEqual(expect.arrayContaining(firstIds));
 
+    // Stage 4: issues, fix options, summary.
+    const issues = await api()
+      .get(`/planning-runs/${ids.run}/issues`)
+      .set(asInstructor)
+      .expect(200);
+    expect(Array.isArray(issues.body)).toBe(true);
+    expect(
+      issues.body.filter((i: { subject: string }) =>
+        i.subject.startsWith('E2ER-UK'),
+      ),
+    ).toEqual([]);
+    const noOptions = await api()
+      .get(`/planning-runs/${ids.run}/courses/${ourCourses[0].id}/fix-options`)
+      .set(asPlanner)
+      .expect(200);
+    expect(noOptions.body).toEqual([]);
+    await api()
+      .post(`/planning-runs/${ids.run}/courses/${ourCourses[0].id}/fix`)
+      .set(asPlanner)
+      .send({ option: 0 })
+      .expect(409);
+    const summary = await api()
+      .get(`/planning-runs/${ids.run}/summary`)
+      .set(asPlanner)
+      .expect(200);
+    expect(summary.body).toMatchObject({ unplannable: 0, unassigned: 0 });
+    expect(summary.body.toCreate).toBeGreaterThanOrEqual(2);
+    expect(summary.body.withInstructor).toBeGreaterThanOrEqual(2);
+    expect(summary.body.apprenticesPlaced).toBe(3);
+
     // A new demand drops every draft course and enrollment of the run.
     await api()
       .post(`/planning-runs/${ids.run}/demand`)
@@ -405,13 +435,100 @@ describe('Planning runs (e2e)', () => {
       [ids.run],
     );
     expect(n).toBe(0);
-
+    // Commit: courses again, staffing, then the whole run in one transaction.
     await api()
-      .delete(`/planning-runs/${ids.run}`)
+      .post(`/planning-runs/${ids.run}/commit`)
+      .set(asPlanner)
+      .expect(409); // no courses yet
+    await api()
+      .post(`/planning-runs/${ids.run}/courses`)
+      .set(asPlanner)
+      .expect(200);
+    await api()
+      .post(`/planning-runs/${ids.run}/staffing`)
+      .set(asPlanner)
+      .expect(200);
+    await api()
+      .post(`/planning-runs/${ids.run}/commit`)
       .set(asInstructor)
       .expect(403);
-    await api().delete(`/planning-runs/${ids.run}`).set(asPlanner).expect(204);
-    await api().get(`/planning-runs/${ids.run}`).set(asPlanner).expect(404);
-    await api().delete(`/planning-runs/${ids.run}`).set(asPlanner).expect(404);
+    const committed = await api()
+      .post(`/planning-runs/${ids.run}/commit`)
+      .set(asPlanner)
+      .expect(200);
+    expect(committed.body).toMatchObject({ dropped: 0 });
+    expect(committed.body.created).toBeGreaterThanOrEqual(2);
+    expect(committed.body.withInstructor).toBe(committed.body.created);
+    const done = await api()
+      .get(`/planning-runs/${ids.run}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(done.body).toMatchObject({
+      status: 'committed',
+      stage: 'committed',
+    });
+    expect(done.body.committedAt).toBeTruthy();
+    const planned = await api()
+      .get(`/courses?planningRunId=${ids.run}&from=2087-01-01`)
+      .set(asPlanner)
+      .expect(200);
+    expect(planned.body.length).toBe(committed.body.created);
+    expect(
+      planned.body.every((c: { status: string }) => c.status === 'planned'),
+    ).toBe(true);
+    expect(
+      planned.body.every(
+        (c: { instructors: unknown[] }) => c.instructors.length === 1,
+      ),
+    ).toBe(true);
+    await api()
+      .post(`/planning-runs/${ids.run}/commit`)
+      .set(asPlanner)
+      .expect(409);
+    await api()
+      .post(`/planning-runs/${ids.run}/demand`)
+      .set(asPlanner)
+      .expect(409);
+    await api().delete(`/planning-runs/${ids.run}`).set(asPlanner).expect(409);
+
+    // Discard: a second run with drafts goes away completely, courses first.
+    const second = await api()
+      .post('/planning-runs')
+      .set(asPlanner)
+      .send({
+        label: 'E2ER Frühlingssemester 2088',
+        periodStartsOn: '2088-02-01',
+        periodEndsOn: '2088-07-31',
+      })
+      .expect(201);
+    await api()
+      .post(`/planning-runs/${second.body.id}/demand`)
+      .set(asPlanner)
+      .expect(200);
+    await api()
+      .post(`/planning-runs/${second.body.id}/courses`)
+      .set(asPlanner)
+      .expect(200);
+    await api()
+      .delete(`/planning-runs/${second.body.id}`)
+      .set(asInstructor)
+      .expect(403);
+    await api()
+      .delete(`/planning-runs/${second.body.id}`)
+      .set(asPlanner)
+      .expect(204);
+    await api()
+      .get(`/planning-runs/${second.body.id}`)
+      .set(asPlanner)
+      .expect(404);
+    const [{ n: leftCourses }] = await ds.query(
+      `SELECT COUNT(*)::int AS n FROM course WHERE planning_run_id = $1`,
+      [second.body.id],
+    );
+    expect(leftCourses).toBe(0);
+    await api()
+      .delete(`/planning-runs/${second.body.id}`)
+      .set(asPlanner)
+      .expect(404);
   });
 });

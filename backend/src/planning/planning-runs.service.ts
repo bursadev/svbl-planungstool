@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Not, Repository } from 'typeorm';
+import { DataSource, In, Not, Repository } from 'typeorm';
 import { Enrollment } from '../apprentices/enrollment.entity.js';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import {
@@ -39,9 +39,24 @@ import {
   type DemandGroup,
 } from './engine/demand.js';
 import { toCourseToStaff } from './courses.service.js';
+import {
+  checkInstructor,
+  rankCandidates,
+  type CourseToStaff,
+  type EngineContext,
+} from './engine/check.js';
+import {
+  fixOptions,
+  validateRun,
+  type DraftCourse,
+  type FixOption,
+  type RunDrafts,
+  type RunIssue,
+} from './engine/fixes.js';
 import { Ledger } from './engine/ledger.js';
 import { proposeCourses } from './engine/propose.js';
 import { staffCourses } from './engine/staffing.js';
+import type { PlanningSnapshot } from './engine/types.js';
 import { checkReadiness, VARIANT_MODULE_RE } from './engine/readiness.js';
 import type {
   DemandSummary,
@@ -127,6 +142,16 @@ export interface RunCourseView {
     candidateCount: number | null;
   } | null;
   staffingIssue: string | null;
+}
+
+/** The balance of the Übernahme stage. */
+export interface CommitSummary {
+  toCreate: number;
+  withInstructor: number;
+  withoutInstructor: number;
+  unplannable: number;
+  apprenticesPlaced: number;
+  unassigned: number;
 }
 
 /** Marks the staffing reason inside `course.notes` next to the slot reasons. */
@@ -280,7 +305,7 @@ export class PlanningRunsService {
         `SELECT COUNT(*)::int AS n FROM apprentice a
          WHERE a.status = 'active' AND NOT EXISTS (
            SELECT 1 FROM enrollment e JOIN course c ON c.id = e.course_id
-           WHERE e.apprentice_id = a.id AND e.status IN ('registered', 'confirmed') AND c.status <> 'cancelled'
+           WHERE e.apprentice_id = a.id AND e.status IN ('registered', 'confirmed') AND c.status NOT IN ('cancelled', 'demand')
              AND (SELECT MIN(d.held_on) FROM course_day d WHERE d.course_id = c.id) >= $1)`,
         [today],
       ) as Promise<{ n: number }[]>,
@@ -322,6 +347,12 @@ export class PlanningRunsService {
   async generateDemand(id: string, actor: AuthUser): Promise<DemandView[]> {
     const run = await this.loadDraft(id);
     const period = { startsOn: run.periodStartsOn, endsOn: run.periodEndsOn };
+    // Earlier drafts of this run go first, so the snapshot does not count them as coverage.
+    await this.ds.transaction(async (em) => {
+      await em.delete(Course, { planningRunId: id });
+      await em.delete(Enrollment, { planningRunId: id });
+      await em.delete(Demand, { planningRunId: id });
+    });
     const snapshot = await this.snapshots.load({
       from: period.startsOn,
       to: period.endsOn,
@@ -477,35 +508,7 @@ export class PlanningRunsService {
       from: period.startsOn,
       to: period.endsOn,
     });
-    const groups: DemandGroup[] = demands
-      .map((d) => {
-        const type = snapshot.courseTypes.get(d.courseTypeId);
-        return {
-          key: d.id,
-          cohortId: d.cohortId ?? '',
-          moduleId: d.curriculumModuleId ?? '',
-          courseTypeId: d.courseTypeId,
-          timeWindowId: d.timeWindowId,
-          window: d.timeWindow
-            ? { startsOn: d.timeWindow.startsOn, endsOn: d.timeWindow.endsOn }
-            : period,
-          locationId: d.locationId,
-          language: d.language,
-          blockedWeekdays: d.blockedWeekdays,
-          memberIds: d.members.map((m) => m.apprenticeId).sort(),
-          classIds: [],
-          existingFreeSeats: d.existingFreeSeats,
-          participantCount: d.participantCount,
-          coursesNeeded: d.coursesNeeded,
-          sizes: sizeCourses(
-            d.participantCount,
-            type?.maxParticipants ?? 12,
-            type?.minParticipants ?? null,
-          ),
-          notes: [],
-        };
-      })
-      .sort((a, b) => compareGroups(snapshot, a, b));
+    const groups = groupsOf(demands, snapshot, period);
     const ctx = {
       snapshot,
       ledger: Ledger.fromSnapshot(snapshot),
@@ -761,6 +764,362 @@ export class PlanningRunsService {
     return this.listRunCourses(id);
   }
 
+  // --- Stage 4: validate, fix, commit --------------------------------------------
+
+  async listIssues(id: string): Promise<RunIssue[]> {
+    const run = await this.load(id);
+    const { ctx, drafts } = await this.draftsOf(run);
+    return validateRun(drafts, ctx);
+  }
+
+  /** The options for the issue of one draft course; empty when the course has none. */
+  async fixOptionsFor(id: string, courseId: string): Promise<FixOption[]> {
+    const run = await this.load(id);
+    const { ctx, drafts } = await this.draftsOf(run);
+    const issue = validateRun(drafts, ctx).find(
+      (i) => i.courseKey === courseId,
+    );
+    if (!issue) return [];
+    return fixOptions(issue, drafts, ctx, {
+      startsOn: run.periodStartsOn,
+      endsOn: run.periodEndsOn,
+    });
+  }
+
+  /**
+   * Applies one option: new dates and room (and location, language) for the
+   * course, or two blocks of the same course, always with the instructor the
+   * option found or the best one the check finds afterwards.
+   */
+  async applyFix(
+    id: string,
+    courseId: string,
+    optionIndex: number,
+    actor: AuthUser,
+  ): Promise<RunCourseView[]> {
+    const run = await this.loadDraft(id);
+    const { ctx, drafts } = await this.draftsOf(run);
+    const course = drafts.courses.find((c) => c.key === courseId);
+    if (!course) throw new NotFoundException('Kurs nicht gefunden.');
+    const issue = validateRun(drafts, ctx).find(
+      (i) => i.courseKey === courseId,
+    );
+    if (!issue)
+      throw new ConflictException(
+        'Dieser Kurs hat kein Problem, das zu lösen wäre.',
+      );
+    const options = fixOptions(issue, drafts, ctx, {
+      startsOn: run.periodStartsOn,
+      endsOn: run.periodEndsOn,
+    });
+    const option = options[optionIndex];
+    if (!option) throw new BadRequestException('Ungültige Option.');
+    if (!option.patch) {
+      throw new ConflictException(
+        'Diese Option ist nur ein Hinweis und wird ausserhalb des Tools umgesetzt.',
+      );
+    }
+    const patch = option.patch;
+    const days =
+      patch.kind === 'split'
+        ? patch.parts.flatMap((p) =>
+            p.dates.map((heldOn) => ({ heldOn, roomId: p.roomId })),
+          )
+        : patch.kind === 'move'
+          ? patch.dates.map((heldOn) => ({ heldOn, roomId: patch.roomId }))
+          : course.dates.map((heldOn) => ({ heldOn, roomId: course.roomId }));
+    days.sort((a, b) => a.heldOn.localeCompare(b.heldOn));
+    const locationId =
+      patch.kind === 'move' ? patch.locationId : course.locationId;
+    const language =
+      patch.kind === 'move' && patch.language
+        ? patch.language
+        : course.language;
+    const target: CourseToStaff = {
+      id: course.key,
+      courseTypeId: course.courseTypeId,
+      locationId,
+      language,
+      cohortId: course.cohortId || null,
+      dates: days.map((d) => d.heldOn),
+    };
+    // The ledger must not see the course's old slot while the instructor is checked.
+    ctx.ledger.releaseCourse(course.key);
+    const wanted =
+      patch.kind === 'assign'
+        ? patch.instructorId
+        : patch.kind === 'move'
+          ? patch.instructorId
+          : undefined;
+    const wantedInstructor = wanted
+      ? ctx.snapshot.instructors.get(wanted)
+      : undefined;
+    const candidate = wantedInstructor
+      ? {
+          instructor: wantedInstructor,
+          result: checkInstructor(target, wantedInstructor, ctx),
+        }
+      : rankCandidates(target, ctx, { limit: 1 })[0];
+    await this.ds.transaction(async (em) => {
+      if (patch.kind !== 'assign') {
+        await em.update(
+          Course,
+          { id: courseId },
+          { locationId, language, planningIssue: null, notes: null },
+        );
+        await em.delete(CourseDay, { courseId });
+        await em.insert(
+          CourseDay,
+          days.map((d, i) => ({
+            courseId,
+            heldOn: d.heldOn,
+            startsAt: '08:15',
+            endsAt: '16:45',
+            sequence: i + 1,
+            roomId: d.roomId,
+          })),
+        );
+      }
+      await em.delete(Assignment, {
+        courseId,
+        status: AssignmentStatus.Proposed,
+      });
+      if (candidate) {
+        await em.insert(Assignment, {
+          courseId,
+          instructorId: candidate.instructor.id,
+          role: AssignmentRole.Lead,
+          status: AssignmentStatus.Proposed,
+          checkResult: candidate.result,
+          score: candidate.result.score,
+          note: option.title,
+        });
+      } else {
+        await em.update(
+          Course,
+          { id: courseId },
+          {
+            notes: `${STAFFING_NOTE}kein Ausbilder erfüllt die harten Regeln für den neuen Termin`,
+          },
+        );
+      }
+    });
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'course',
+      entityId: courseId,
+      action: 'fix',
+      after: { option: option.title, patch },
+      summary: `hat im Planungslauf «${run.label}» Vorschlag «${option.title}» übernommen`,
+    });
+    return this.listRunCourses(id);
+  }
+
+  async summary(id: string): Promise<CommitSummary> {
+    await this.load(id);
+    const [row]: {
+      to_create: string;
+      with_instructor: string;
+      unplannable: string;
+      placed: string;
+      unassigned: string;
+    }[] = await this.ds.query(
+      `SELECT
+         (SELECT COUNT(*) FROM course c WHERE c.planning_run_id = $1
+            AND EXISTS (SELECT 1 FROM course_day d WHERE d.course_id = c.id)) AS to_create,
+         (SELECT COUNT(*) FROM course c WHERE c.planning_run_id = $1
+            AND EXISTS (SELECT 1 FROM course_day d WHERE d.course_id = c.id)
+            AND EXISTS (SELECT 1 FROM assignment a WHERE a.course_id = c.id AND a.status IN ('proposed', 'confirmed'))) AS with_instructor,
+         (SELECT COUNT(*) FROM course c WHERE c.planning_run_id = $1
+            AND NOT EXISTS (SELECT 1 FROM course_day d WHERE d.course_id = c.id)) AS unplannable,
+         (SELECT COUNT(DISTINCT e.apprentice_id) FROM enrollment e WHERE e.planning_run_id = $1) AS placed,
+         (SELECT COUNT(DISTINCT da.apprentice_id) FROM demand d JOIN demand_apprentice da ON da.demand_id = d.id
+            WHERE d.planning_run_id = $1
+              AND NOT EXISTS (SELECT 1 FROM enrollment e WHERE e.planning_run_id = $1 AND e.apprentice_id = da.apprentice_id)) AS unassigned`,
+      [id],
+    );
+    const toCreate = Number(row.to_create);
+    const withInstructor = Number(row.with_instructor);
+    return {
+      toCreate,
+      withInstructor,
+      withoutInstructor: toCreate - withInstructor,
+      unplannable: Number(row.unplannable),
+      apprenticesPlaced: Number(row.placed),
+      unassigned: Number(row.unassigned),
+    };
+  }
+
+  /**
+   * One transaction: placed drafts become planned courses, unplannable ones
+   * are dropped, the demand is planned, the run is committed. Assignments
+   * stay proposed until the planner confirms them.
+   */
+  async commit(
+    id: string,
+    actor: AuthUser,
+  ): Promise<{ created: number; withInstructor: number; dropped: number }> {
+    const run = await this.load(id);
+    if (run.status === PlanningRunStatus.Committed) {
+      throw new ConflictException('Der Planungslauf wurde bereits übernommen.');
+    }
+    if (run.status !== PlanningRunStatus.Draft)
+      throw new ConflictException('Der Planungslauf ist verworfen.');
+    const drafts = await this.courses.find({
+      where: { planningRunId: id },
+      relations: {
+        courseType: true,
+        location: true,
+        days: true,
+        assignments: true,
+      },
+    });
+    const placed = drafts.filter((c) => c.days.length > 0);
+    if (placed.length === 0)
+      throw new ConflictException('Keine planbaren Kurse zum Übernehmen.');
+    const dropped = drafts.filter((c) => c.days.length === 0);
+    const withInstructor = placed.filter((c) =>
+      c.assignments.some(
+        (a) =>
+          a.status === AssignmentStatus.Proposed ||
+          a.status === AssignmentStatus.Confirmed,
+      ),
+    ).length;
+    await this.ds.transaction(async (em) => {
+      if (dropped.length)
+        await em.delete(Course, { id: In(dropped.map((c) => c.id)) });
+      await em.update(
+        Course,
+        { id: In(placed.map((c) => c.id)) },
+        { status: CourseStatus.Planned },
+      );
+      await em.update(
+        Demand,
+        { planningRunId: id },
+        { status: DemandStatus.Planned },
+      );
+      await em.update(
+        PlanningRun,
+        { id },
+        {
+          status: PlanningRunStatus.Committed,
+          stage: PlanningRunStage.Committed,
+          committedAt: new Date(),
+        },
+      );
+    });
+    for (const course of placed) {
+      const first = [...course.days].sort((a, b) =>
+        a.heldOn.localeCompare(b.heldOn),
+      )[0];
+      await this.audit.record({
+        actorUserId: actor.dbUserId,
+        entityType: 'course',
+        entityId: course.id,
+        action: 'create',
+        after: { status: CourseStatus.Planned, planningRunId: id },
+        summary: `hat Kurs ${course.courseType.code} ${course.location.name} KW ${isoWeek(first.heldOn).week} aus Planungslauf «${run.label}» angelegt`,
+      });
+    }
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'planning_run',
+      entityId: id,
+      action: 'commit',
+      after: {
+        created: placed.length,
+        withInstructor,
+        dropped: dropped.length,
+      },
+      summary: `hat Planungslauf «${run.label}» übernommen (${placed.length} Kurse, ${withInstructor} mit Ausbilder, ${dropped.length} verworfen)`,
+    });
+    return { created: placed.length, withInstructor, dropped: dropped.length };
+  }
+
+  /** The run's drafts as the validation sees them, with a context whose ledger holds the whole plan. */
+  private async draftsOf(
+    run: PlanningRun,
+  ): Promise<{ ctx: EngineContext; drafts: RunDrafts }> {
+    const period = { startsOn: run.periodStartsOn, endsOn: run.periodEndsOn };
+    const snapshot = await this.snapshots.load(
+      { from: period.startsOn, to: period.endsOn },
+      { includeApprentices: false },
+    );
+    const ctx: EngineContext = {
+      snapshot,
+      ledger: Ledger.fromSnapshot(snapshot),
+      today: snapshot.asOf,
+    };
+    const [demands, courses, enrolled] = await Promise.all([
+      this.demands.find({
+        where: { planningRunId: run.id },
+        relations: { members: true, timeWindow: true },
+      }),
+      this.courses.find({
+        where: { planningRunId: run.id },
+        relations: { days: true, assignments: true },
+      }),
+      this.ds.query(
+        `SELECT course_id, apprentice_id FROM enrollment WHERE planning_run_id = $1`,
+        [run.id],
+      ) as Promise<{ course_id: string; apprentice_id: string }[]>,
+    ]);
+    const groups = groupsOf(demands, snapshot, period);
+    const memberOf = new Map<string, string[]>();
+    for (const e of enrolled)
+      memberOf.set(e.course_id, [
+        ...(memberOf.get(e.course_id) ?? []),
+        e.apprentice_id,
+      ]);
+    const placedIds = new Set(enrolled.map((e) => e.apprentice_id));
+    const draftCourses: DraftCourse[] = courses
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((c) => {
+        const days = [...c.days].sort((a, b) =>
+          a.heldOn.localeCompare(b.heldOn),
+        );
+        const notes = (c.notes ?? '').split(' · ').filter(Boolean);
+        const staffing = notes.find((n) => n.startsWith(STAFFING_NOTE));
+        const assignment = c.assignments.find(
+          (a) =>
+            a.status === AssignmentStatus.Proposed ||
+            a.status === AssignmentStatus.Confirmed,
+        );
+        return {
+          key: c.id,
+          demandKey: c.demandId ?? '',
+          courseTypeId: c.courseTypeId,
+          locationId: c.locationId,
+          language: c.language,
+          cohortId: c.cohortId ?? '',
+          timeWindowId: c.timeWindowId,
+          seats: c.capacity,
+          dates: days.map((d) => d.heldOn),
+          roomId: days[0]?.roomId ?? null,
+          memberIds: memberOf.get(c.id) ?? [],
+          issue: c.planningIssue,
+          reasons: notes.filter((n) => !n.startsWith(STAFFING_NOTE)),
+          instructorId: assignment?.instructorId ?? null,
+          staffingIssue: staffing ? staffing.slice(STAFFING_NOTE.length) : null,
+        };
+      });
+    const unassigned = groups.flatMap((g) => {
+      const own = draftCourses.filter((c) => c.demandKey === g.key);
+      const allUnplannable =
+        own.length > 0 && own.every((c) => c.issue !== null);
+      return g.memberIds
+        .filter((id) => !placedIds.has(id))
+        .map((apprenticeId) => ({
+          apprenticeId,
+          demandKey: g.key,
+          reason: allUnplannable
+            ? `Kurs nicht planbar: ${own[0].issue}`
+            : 'kein Platz mehr in den Kursen der Gruppe',
+        }));
+    });
+    return { ctx, drafts: { courses: draftCourses, groups, unassigned } };
+  }
+
   /** The run, or 409 when it is no longer a draft. */
   async loadDraft(id: string): Promise<PlanningRun> {
     const run = await this.load(id);
@@ -865,4 +1224,41 @@ function whyOf(result: AssignmentCheckResult | null): string {
 function candidateCountOf(note: string | null): number | null {
   const match = note ? /^(\d+) machbare/.exec(note) : null;
   return match ? Number(match[1]) : null;
+}
+
+/** Demand rows back into the engine's groups, sorted like the demand list. */
+function groupsOf(
+  demands: Demand[],
+  snapshot: PlanningSnapshot,
+  period: { startsOn: IsoDate; endsOn: IsoDate },
+): DemandGroup[] {
+  return demands
+    .map((d): DemandGroup => {
+      const type = snapshot.courseTypes.get(d.courseTypeId);
+      return {
+        key: d.id,
+        cohortId: d.cohortId ?? '',
+        moduleId: d.curriculumModuleId ?? '',
+        courseTypeId: d.courseTypeId,
+        timeWindowId: d.timeWindowId,
+        window: d.timeWindow
+          ? { startsOn: d.timeWindow.startsOn, endsOn: d.timeWindow.endsOn }
+          : period,
+        locationId: d.locationId,
+        language: d.language,
+        blockedWeekdays: d.blockedWeekdays,
+        memberIds: d.members.map((m) => m.apprenticeId).sort(),
+        classIds: [],
+        existingFreeSeats: d.existingFreeSeats,
+        participantCount: d.participantCount,
+        coursesNeeded: d.coursesNeeded,
+        sizes: sizeCourses(
+          d.participantCount,
+          type?.maxParticipants ?? 12,
+          type?.minParticipants ?? null,
+        ),
+        notes: [],
+      };
+    })
+    .sort((a, b) => compareGroups(snapshot, a, b));
 }

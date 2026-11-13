@@ -38,6 +38,8 @@ export interface SlotOptions {
   weeks?: IsoDate[];
   /** Mondays the demand group already has a course in. */
   groupWeeks?: ReadonlySet<IsoDate>;
+  /** Overrides the course type's duration (the split option plans two shorter parts). */
+  durationDays?: number;
 }
 
 const WEEKDAY_SHORT = ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -140,6 +142,7 @@ export function feasibleSlots(
       })),
     };
   }
+  const durationDays = opts.durationDays ?? type.durationDays;
   const needsPractice = type.requiredDevices.length > 0;
   const roomKind = needsPractice ? RoomKind.PracticeHall : RoomKind.Theory;
   const roomKindLabel = needsPractice ? 'Praxishalle' : 'Theorieraum';
@@ -167,7 +170,7 @@ export function feasibleSlots(
   for (const weekMonday of weeks) {
     const patterns = dayPatterns({
       weekMonday,
-      durationDays: type.durationDays,
+      durationDays,
       weekdayRule: type.weekdayRule,
       maySpanWeeks: type.maySpanWeeks,
       blockedWeekdays: req.blockedWeekdays,
@@ -182,8 +185,8 @@ export function feasibleSlots(
       rejected.push({
         weekMonday,
         reason: req.blockedWeekdays.size
-          ? `Schultag ${weekdayNames(req.blockedWeekdays)} lässt keinen Block von ${type.durationDays} Tagen zu`
-          : `kein Block von ${type.durationDays} Tagen in dieser Woche (Feiertag, Fensterende oder Startdatum)`,
+          ? `Schultag ${weekdayNames(req.blockedWeekdays)} lässt keinen Block von ${durationDays} Tagen zu`
+          : `kein Block von ${durationDays} Tagen in dieser Woche (Feiertag, Fensterende oder Startdatum)`,
       });
       continue;
     }
