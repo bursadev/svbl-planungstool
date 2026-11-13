@@ -66,6 +66,14 @@ export class PlanningRunsController {
     return this.runs.listRunCourses(id);
   }
 
+  /** Stage 3: proposes an instructor for every placed draft course. */
+  @Post(':id/staffing')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  staffRun(@Param('id', uuidPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.runs.staffRun(id, user);
+  }
+
   /** Discards a draft run with all its drafts; a committed run is a 409. */
   @Delete(':id')
   @Roles(...WRITE_ROLES)

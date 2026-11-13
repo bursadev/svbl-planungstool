@@ -8,10 +8,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Not, Repository } from 'typeorm';
 import { Enrollment } from '../apprentices/enrollment.entity.js';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
-import type { AssignmentCheckResult } from '../courses/assignment.entity.js';
+import {
+  Assignment,
+  type AssignmentCheckResult,
+} from '../courses/assignment.entity.js';
 import { CourseDay } from '../courses/course-day.entity.js';
 import { Course } from '../courses/course.entity.js';
 import {
+  AssignmentRole,
   AssignmentStatus,
   CourseStatus,
   DemandSource,
@@ -34,8 +38,10 @@ import {
   sizeCourses,
   type DemandGroup,
 } from './engine/demand.js';
+import { toCourseToStaff } from './courses.service.js';
 import { Ledger } from './engine/ledger.js';
 import { proposeCourses } from './engine/propose.js';
+import { staffCourses } from './engine/staffing.js';
 import { checkReadiness, VARIANT_MODULE_RE } from './engine/readiness.js';
 import type {
   DemandSummary,
@@ -654,6 +660,105 @@ export class PlanningRunsService {
           (a.dates[0] ?? '9999').localeCompare(b.dates[0] ?? '9999') ||
           a.id.localeCompare(b.id),
       );
+  }
+
+  // --- Stage 3: instructors ----------------------------------------------------
+
+  /**
+   * Replaces the proposed assignments of the run's draft courses with the
+   * engine's staffing (most constrained first, 2-swap improvement). Courses
+   * nobody can teach keep the reason in their notes (`Besetzung: …`).
+   */
+  async staffRun(id: string, actor: AuthUser): Promise<RunCourseView[]> {
+    const run = await this.loadDraft(id);
+    const drafts = await this.courses.find({
+      where: { planningRunId: id },
+      relations: {
+        courseType: true,
+        location: true,
+        days: true,
+        assignments: true,
+      },
+    });
+    if (drafts.length === 0)
+      throw new ConflictException('Zuerst die Kurse vorschlagen.');
+    const draftIds = drafts.map((c) => c.id);
+    await this.ds.transaction(async (em) => {
+      await em
+        .createQueryBuilder()
+        .delete()
+        .from(Assignment)
+        .where('course_id = ANY(:ids) AND status = :status', {
+          ids: draftIds,
+          status: AssignmentStatus.Proposed,
+        })
+        .execute();
+      for (const course of drafts) {
+        const kept = (course.notes ?? '')
+          .split(' · ')
+          .filter((n) => n && !n.startsWith(STAFFING_NOTE));
+        course.notes = kept.length ? kept.join(' · ') : null;
+        course.assignments = course.assignments.filter(
+          (a) => a.status !== AssignmentStatus.Proposed,
+        );
+        await em.update(Course, { id: course.id }, { notes: course.notes });
+      }
+    });
+    const snapshot = await this.snapshots.load(
+      { from: run.periodStartsOn, to: run.periodEndsOn },
+      { includeApprentices: false },
+    );
+    const ctx = {
+      snapshot,
+      ledger: Ledger.fromSnapshot(snapshot),
+      today: snapshot.asOf,
+    };
+    const placed = drafts
+      .filter((c) => c.days.length > 0)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const result = staffCourses(placed.map(toCourseToStaff), ctx);
+    await this.ds.transaction(async (em) => {
+      for (const s of result.staffed) {
+        await em.insert(Assignment, {
+          courseId: s.courseId,
+          instructorId: s.instructorId,
+          role: AssignmentRole.Lead,
+          status: AssignmentStatus.Proposed,
+          checkResult: s.result,
+          score: s.result.score,
+          note: `${s.candidateCount} machbare Kandidaten`,
+        });
+      }
+      for (const u of result.unstaffed) {
+        const course = placed.find((c) => c.id === u.courseId)!;
+        const notes = [
+          ...(course.notes ?? '').split(' · ').filter(Boolean),
+          `${STAFFING_NOTE}${u.reason}`,
+        ];
+        await em.update(
+          Course,
+          { id: u.courseId },
+          { notes: notes.join(' · ') },
+        );
+      }
+      await em.update(
+        PlanningRun,
+        { id },
+        { stage: PlanningRunStage.Staffing },
+      );
+    });
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'planning_run',
+      entityId: id,
+      action: 'staffing',
+      after: {
+        staffed: result.staffed.length,
+        unstaffed: result.unstaffed.length,
+      },
+      summary: `hat für Planungslauf «${run.label}» ${result.staffed.length} Kurse besetzt (${result.unstaffed.length} ohne machbaren Ausbilder)`,
+    });
+    return this.listRunCourses(id);
   }
 
   /** The run, or 409 when it is no longer a draft. */

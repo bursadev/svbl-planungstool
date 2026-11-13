@@ -342,6 +342,54 @@ describe('Planning runs (e2e)', () => {
       proposed.body.map((c: { id: string }) => c.id).sort(),
     );
 
+    // Stage 3: instructors. Ida (de, at the location) is feasible for every course.
+    await api()
+      .post(`/planning-runs/${ids.run}/staffing`)
+      .set(asInstructor)
+      .expect(403);
+    const staffed = await api()
+      .post(`/planning-runs/${ids.run}/staffing`)
+      .set(asPlanner)
+      .expect(200);
+    const staffedOurs = staffed.body.filter(
+      (c: { courseType: { code: string } }) => c.courseType.code === 'E2ER-UK',
+    );
+    for (const course of staffedOurs) {
+      expect(course.proposedInstructor).toMatchObject({
+        lastName: 'E2ER Lehrer',
+        score: expect.any(Number),
+      });
+      expect(course.proposedInstructor.candidateCount).toBeGreaterThanOrEqual(
+        1,
+      );
+      expect(course.proposedInstructor.why).toContain('Heimstandort');
+      expect(course.staffingIssue).toBeNull();
+    }
+    const afterStaffing = await api()
+      .get(`/planning-runs/${ids.run}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(afterStaffing.body.stage).toBe('staffing');
+    expect(afterStaffing.body.counts.coursesStaffed).toBeGreaterThanOrEqual(2);
+    const restaffed = await api()
+      .post(`/planning-runs/${ids.run}/staffing`)
+      .set(asPlanner)
+      .expect(200);
+    const firstIds = staffedOurs.map(
+      (c: { proposedInstructor: { assignmentId: string } }) =>
+        c.proposedInstructor.assignmentId,
+    );
+    const secondIds = restaffed.body
+      .filter(
+        (c: { courseType: { code: string } }) =>
+          c.courseType.code === 'E2ER-UK',
+      )
+      .map(
+        (c: { proposedInstructor: { assignmentId: string } }) =>
+          c.proposedInstructor.assignmentId,
+      );
+    expect(secondIds).not.toEqual(expect.arrayContaining(firstIds));
+
     // A new demand drops every draft course and enrollment of the run.
     await api()
       .post(`/planning-runs/${ids.run}/demand`)
