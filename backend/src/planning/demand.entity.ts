@@ -5,6 +5,7 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   type Relation,
 } from 'typeorm';
 import { CourseType } from '../courses/course-type.entity.js';
@@ -19,6 +20,7 @@ import {
   DemandStatus,
 } from '../database/enums.js';
 import { Location } from '../locations/location.entity.js';
+import { DemandApprentice } from './demand-apprentice.entity.js';
 import { PlanningRun } from './planning-run.entity.js';
 
 /**
@@ -74,9 +76,17 @@ export class Demand extends BaseEntity {
   @JoinColumn({ name: 'location_id' })
   location: Relation<Location>;
 
-  /** ISO weekday (Monday = 1) the apprentices are at school; `freeSlot` avoids it. */
+  /** First ISO weekday (Monday = 1) the apprentices are at school; the pill in the UI. */
   @Column({ type: 'smallint', nullable: true })
   schoolWeekday: number | null;
+
+  /** All ISO weekdays the group is at school; the slot search keeps them free. */
+  @Column({ type: 'smallint', array: true, default: '{}' })
+  blockedWeekdays: number[];
+
+  /** Free seats of existing courses counted against the group (planning spec, decision 1). */
+  @Column({ type: 'smallint', default: 0 })
+  existingFreeSeats: number;
 
   @Column('integer')
   participantCount: number;
@@ -98,4 +108,7 @@ export class Demand extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   note: string | null;
+
+  @OneToMany(() => DemandApprentice, (member) => member.demand)
+  members: Relation<DemandApprentice>[];
 }

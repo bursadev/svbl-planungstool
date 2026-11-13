@@ -14,6 +14,7 @@ import {
   PlanningRunStatus,
 } from '../database/enums.js';
 import { User } from '../users/user.entity.js';
+import type { DemandSummary, ReadinessReport } from './engine/types.js';
 
 /**
  * Planungslauf: one pass of demand → courses → staffing for a period, which
@@ -59,4 +60,12 @@ export class PlanningRun extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   note: string | null;
+
+  /** The readiness check taken when the run was created: which rules have data, which are skipped. */
+  @Column({ type: 'jsonb', nullable: true })
+  readiness: ReadinessReport | null;
+
+  /** Catch-ups, skipped variants and apprentices without class of the last demand step. */
+  @Column({ type: 'jsonb', nullable: true })
+  demandSummary: DemandSummary | null;
 }

@@ -34,6 +34,7 @@ import { Skill } from '../instructors/skill.entity.js';
 import { LocationDistance } from '../locations/location-distance.entity.js';
 import { Location } from '../locations/location.entity.js';
 import { Room } from '../locations/room.entity.js';
+import { DemandApprentice } from '../planning/demand-apprentice.entity.js';
 import { Demand } from '../planning/demand.entity.js';
 import { PlanningRun } from '../planning/planning-run.entity.js';
 import { Alert } from '../system/alert.entity.js';
@@ -89,6 +90,7 @@ export const ALL_ENTITIES = [
   Attendance,
   PlanningRun,
   Demand,
+  DemandApprentice,
   Alert,
   ImportBatch,
   ValidationIssue,

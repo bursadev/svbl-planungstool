@@ -281,3 +281,12 @@ export interface ReadinessReport {
   checkedAt: string;
   items: ReadinessItem[];
 }
+
+/** What the demand step found besides the groups; stored on the run (`planning_run.demand_summary`). */
+export interface DemandSummary {
+  generatedAt: string;
+  /** Apprentices with an uncovered module of an earlier semester; counted, not planned (decision 4). */
+  catchUps: number;
+  skippedVariantModules: string[];
+  apprenticesWithoutClass: number;
+}

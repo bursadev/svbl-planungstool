@@ -11,6 +11,7 @@ import {
   CoursesController,
 } from './courses.controller.js';
 import { CoursesService } from './courses.service.js';
+import { DemandApprentice } from './demand-apprentice.entity.js';
 import { Demand } from './demand.entity.js';
 import { PlanningRun } from './planning-run.entity.js';
 import { SnapshotService } from './snapshot.service.js';
@@ -20,6 +21,7 @@ import { SnapshotService } from './snapshot.service.js';
     TypeOrmModule.forFeature([
       PlanningRun,
       Demand,
+      DemandApprentice,
       Course,
       CourseDay,
       Assignment,

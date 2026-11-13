@@ -24,10 +24,11 @@ pnpm start:dev         # http://localhost:3001
 | `pnpm migration:run` / `pnpm migration:revert` | Apply / roll back migrations |
 | `pnpm seed` | Wipe all domain tables and load the prototype's demo data (development only) |
 | `pnpm seed:users` | Create / update the two Clerk demo accounts (planner + instructor) in the development instance |
+| `pnpm import:odaorg` | Wipe all domain tables (users and settings are kept) and load the OdAOrg data crawled into `tools/odaorg-crawler/out/`; `--dry-run` only prints the counts, `--active-since YYYY-MM-DD` sets the date from which an instructor counts as active (default: 1 August of the previous school year). See `docs/odaorg/site-analysis.md` and `tools/odaorg-crawler/README.md` |
 
 `synchronize` is off, so schema changes always go through migrations. Entities are picked up automatically from any `*.entity.ts` file under `src/`. Connection settings are shared between the app and the TypeORM CLI in `src/database/database.options.ts`.
 
-The schema is described in `docs/superpowers/specs/2026-10-01-data-model-design.md` (45 tables since the Kunden module was dropped on 2026-11-12, one Nest module per cluster: `users`, `locations`, `devices`, `instructors`, `courses`, `curriculum`, `apprentices`, `planning`, `system`). Table and column names are snake_case through `SnakeNamingStrategy`; shared enums live in `src/database/enums.ts`.
+The schema is described in `docs/superpowers/specs/2026-10-01-data-model-design.md` (46 tables: the Kunden module was dropped on 2026-11-12, the planning-run drafts added `demand_apprentice` on 2026-11-13; one Nest module per cluster: `users`, `locations`, `devices`, `instructors`, `courses`, `curriculum`, `apprentices`, `planning`, `system`). Table and column names are snake_case through `SnakeNamingStrategy`; shared enums live in `src/database/enums.ts`.
 
 After `migration:generate`, check the file for duplicate `CREATE TYPE` / `DROP TYPE` statements: TypeORM emits one per table that uses a shared enum (`enumName`), and the second one fails at run time. Keep the first `CREATE TYPE` and the last `DROP TYPE` per enum. `pnpm test:e2e` contains a round-trip test that fails when entities and migrations drift apart.
 

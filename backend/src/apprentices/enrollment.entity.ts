@@ -16,6 +16,7 @@ import {
   EnrollmentChannel,
   EnrollmentStatus,
 } from '../database/enums.js';
+import { PlanningRun } from '../planning/planning-run.entity.js';
 import { User } from '../users/user.entity.js';
 import { Apprentice } from './apprentice.entity.js';
 import { Attendance } from './attendance.entity.js';
@@ -25,6 +26,7 @@ import { Attendance } from './attendance.entity.js';
 @Unique(['courseId', 'apprenticeId'])
 @Index(['apprenticeId'])
 @Index(['courseId'])
+@Index(['planningRunId'])
 export class Enrollment extends BaseEntity {
   @Column('uuid')
   courseId: string;
@@ -80,6 +82,14 @@ export class Enrollment extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+
+  /** Set on draft enrollments of a planning run; discarding the run deletes them. */
+  @Column({ type: 'uuid', nullable: true })
+  planningRunId: string | null;
+
+  @ManyToOne(() => PlanningRun, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'planning_run_id' })
+  planningRun: Relation<PlanningRun> | null;
 
   @OneToMany(() => Attendance, (attendance) => attendance.enrollment)
   attendances: Relation<Attendance>[];

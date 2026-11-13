@@ -205,6 +205,8 @@ Column lists name the columns beyond `id`, `created_at`, `updated_at`. `→` mar
 
 **demand** — `planning_run_id` → planning_run nullable (cascade) · `cohort_id` → cohort nullable · `curriculum_module_id` → curriculum_module nullable · `course_type_id` → course_type · `time_window_id` → time_window nullable · `location_id` → location · `school_weekday` smallint nullable · `participant_count` integer · `courses_needed` smallint · `source` demand_source · `status` demand_status default open · `note` text nullable. CHECK participant_count ≥ 0, courses_needed ≥ 0, school_weekday between 1 and 7. Index (planning_run_id), (location_id).
 
+**demand_apprentice** (added 2026-11-13 with the planning-run plan) — `demand_id` → demand (cascade) · `apprentice_id` → apprentice (restrict); PK (demand_id, apprentice_id): the members of a demand group, so the course proposal packs exactly them. The same migration (`PlanningRunDrafts`) added `demand.blocked_weekdays smallint[]` (all school days of the group; `school_weekday` keeps the first), `demand.existing_free_seats smallint`, `planning_run.readiness jsonb` (the readiness report at creation) and `enrollment.planning_run_id` → planning_run nullable (cascade) for draft enrollments.
+
 ### system
 
 **alert** — `kind` alert_kind · `severity` alert_severity · `subject_type` text · `subject_id` uuid · `message` text · `due_on` date nullable · `status` alert_status default open · `acknowledged_by_user_id` → user nullable · `acknowledged_at` timestamptz nullable · `resolved_at` timestamptz nullable · `dedupe_key` text nullable unique. Index (status, severity), (subject_type, subject_id).
