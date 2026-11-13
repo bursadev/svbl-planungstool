@@ -27,6 +27,14 @@ export function uuidParam(value: string | string[] | undefined): string | undefi
   return v && UUID.test(v) ? v : undefined;
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A `YYYY-MM-DD` parameter; anything else is treated as absent rather than a 400. */
+export function dateParam(value: string | string[] | undefined): string | undefined {
+  const v = first(value);
+  return v && ISO_DATE.test(v) && !Number.isNaN(Date.parse(v)) ? v : undefined;
+}
+
 /** Keeps only values the API accepts; anything else is treated as «Alle» rather than a 400. */
 export function oneOf<T extends string>(value: string | string[] | undefined, allowed: readonly T[]): T | undefined {
   const v = first(value);

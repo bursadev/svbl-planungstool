@@ -17,3 +17,4 @@ export { Pagination } from "./pagination";
 export { ResetFilters } from "./reset-filters";
 export { BulkBar, SelectAllHead, SelectCell, SelectCheckbox, SelectionProvider } from "./selection";
 export { SortableHead } from "./sortable-head";
+export { UrlDateRange } from "./url-date-range";

@@ -18,6 +18,7 @@ export * from "./certificate-types";
 export * from "./device-types";
 export * from "./instructors";
 export * from "./course-types";
+export * from "./courses";
 export * from "./curriculum";
 export * from "./vocational-schools";
 export * from "./apprentices";
