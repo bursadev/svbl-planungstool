@@ -1,3 +1,4 @@
+import { Track, WeekdayRule } from '../../database/enums.js';
 import {
   addDays,
   cohortSemester,
@@ -47,19 +48,19 @@ describe('calendar', () => {
     expect(schoolYearStart('2026-08-01')).toBe(2026);
     expect(schoolYearStart('2027-02-01')).toBe(2026);
     expect(
-      cohortSemester({ startYear: 2024, track: 'efz' }, '2026-08-01'),
+      cohortSemester({ startYear: 2024, track: Track.Efz }, '2026-08-01'),
     ).toBe(5);
     expect(
-      cohortSemester({ startYear: 2025, track: 'efz' }, '2027-02-01'),
+      cohortSemester({ startYear: 2025, track: Track.Efz }, '2027-02-01'),
     ).toBe(4);
     expect(
-      cohortSemester({ startYear: 2026, track: 'eba' }, '2027-02-01'),
+      cohortSemester({ startYear: 2026, track: Track.Eba }, '2027-02-01'),
     ).toBe(2);
     expect(
-      cohortSemester({ startYear: 2025, track: 'eba' }, '2027-08-01'),
+      cohortSemester({ startYear: 2025, track: Track.Eba }, '2027-08-01'),
     ).toBeNull();
     expect(
-      cohortSemester({ startYear: 2027, track: 'efz' }, '2027-02-01'),
+      cohortSemester({ startYear: 2027, track: Track.Efz }, '2027-02-01'),
     ).toBeNull();
   });
 
@@ -83,7 +84,7 @@ describe('calendar', () => {
     const base = {
       weekMonday: '2027-03-22',
       durationDays: 2,
-      weekdayRule: 'weekdays',
+      weekdayRule: WeekdayRule.Weekdays,
       maySpanWeeks: false,
       holidays: new Set(['2027-03-26']),
     } as const;
@@ -103,7 +104,7 @@ describe('calendar', () => {
     const req = {
       weekMonday: '2027-03-01',
       durationDays: 4,
-      weekdayRule: 'weekdays',
+      weekdayRule: WeekdayRule.Weekdays,
       blockedWeekdays: new Set<number>(),
       holidays: new Set<string>(),
     } as const;
@@ -123,7 +124,7 @@ describe('calendar', () => {
       dayPatterns({
         weekMonday: '2027-03-01',
         durationDays: 1,
-        weekdayRule: 'weekdays',
+        weekdayRule: WeekdayRule.Weekdays,
         maySpanWeeks: false,
         blockedWeekdays: new Set(),
         holidays: new Set(),
@@ -137,7 +138,7 @@ describe('calendar', () => {
       dayPatterns({
         weekMonday: '2027-03-01',
         durationDays: 2,
-        weekdayRule: 'saturday',
+        weekdayRule: WeekdayRule.Saturday,
         maySpanWeeks: true,
         blockedWeekdays: new Set(),
         holidays: new Set(),

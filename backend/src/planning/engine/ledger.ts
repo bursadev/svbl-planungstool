@@ -105,11 +105,10 @@ export class Ledger {
     const devices =
       this.courseTypes.get(course.courseTypeId)?.requiredDevices ?? [];
     for (const day of course.days) {
-      cell(this.locationDays, day.locationId).get(day.heldOn)?.add(course.id) ??
-        cell(this.locationDays, day.locationId).set(
-          day.heldOn,
-          new Set([course.id]),
-        );
+      const atLocation = cell(this.locationDays, day.locationId);
+      const ids = atLocation.get(day.heldOn);
+      if (ids) ids.add(course.id);
+      else atLocation.set(day.heldOn, new Set([course.id]));
       if (day.roomId)
         cell(this.roomDays, day.roomId).set(day.heldOn, course.id);
       for (const { deviceTypeId, quantity } of devices) {
