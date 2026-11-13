@@ -15,6 +15,8 @@ export interface ErrorBody {
   statusCode: number;
   message: string;
   errors?: FieldError[];
+  /** Structured context an exception passes as `{ message, details }`, e.g. the failed check of an assignment. */
+  details?: unknown;
 }
 
 /** German defaults for the Nest exceptions thrown without a message. */
@@ -55,7 +57,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : mapDatabaseError(exception);
     if (http) {
       const status = http.getStatus();
-      return { statusCode: status, message: messageOf(http, status) };
+      const details = detailsOf(http);
+      return {
+        statusCode: status,
+        message: messageOf(http, status),
+        ...(details === undefined ? {} : { details }),
+      };
     }
     const cause =
       exception instanceof Error
@@ -70,6 +77,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message: 'Unerwarteter Fehler.',
     };
   }
+}
+
+function detailsOf(http: HttpException): unknown {
+  const response = http.getResponse();
+  return typeof response === 'object' &&
+    response !== null &&
+    'details' in response
+    ? (response as { details: unknown }).details
+    : undefined;
 }
 
 function messageOf(http: HttpException, status: number): string {

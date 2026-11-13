@@ -386,6 +386,7 @@ export function checkInstructor(
 
   // Soft: pairings to avoid
   for (const coId of course.coInstructorIds ?? []) {
+    if (coId === instructor.id) continue;
     const co = snapshot.instructors.get(coId);
     if (
       instructor.avoidInstructorIds.includes(coId) ||

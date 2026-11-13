@@ -1,7 +1,23 @@
-import { IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import { ListPageQuery } from '../../common/list-query.js';
 import { IsDateOnly } from '../../common/validators.js';
-import { CourseKind, CourseStatus, Language } from '../../database/enums.js';
+import {
+  AssignmentRole,
+  CourseKind,
+  CourseStatus,
+  Language,
+} from '../../database/enums.js';
 
 export const STAFFING_FILTERS = ['unstaffed', 'staffed'] as const;
 export type StaffingFilter = (typeof STAFFING_FILTERS)[number];
@@ -49,4 +65,32 @@ export class ListCoursesQuery extends ListPageQuery {
   @IsOptional()
   @IsString()
   q?: string;
+}
+
+/** GET /courses/:id/candidates: `limit` (default 6), `all=true` includes instructors that violate a hard rule. */
+export class CandidatesQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  limit?: number;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  all?: 'true' | 'false';
+}
+
+/** POST /courses/:id/assignments: `force` writes the assignment although a hard rule fails. */
+export class AssignInstructorDto {
+  @IsUUID()
+  instructorId: string;
+
+  @IsOptional()
+  @IsIn([AssignmentRole.Lead, AssignmentRole.Assistant])
+  role?: AssignmentRole;
+
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }

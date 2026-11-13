@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { applySearch, pageOf, type Page } from '../common/list-query.js';
 import type {
   Assignment,
@@ -16,9 +21,23 @@ import {
   EmploymentType,
   Language,
 } from '../database/enums.js';
+import { AuditService, snapshot } from '../system/audit.service.js';
+import type {
+  AssignInstructorDto,
+  CandidatesQuery,
+  ListCoursesQuery,
+} from './dto/course.dto.js';
 import { isoWeek } from './engine/calendar.js';
-import type { IsoDate } from './engine/types.js';
-import type { ListCoursesQuery } from './dto/course.dto.js';
+import {
+  checkInstructor,
+  rankCandidates,
+  type Candidate,
+  type CourseToStaff,
+  type EngineContext,
+} from './engine/check.js';
+import { Ledger } from './engine/ledger.js';
+import type { IsoDate, PlanningSnapshot } from './engine/types.js';
+import { SnapshotService } from './snapshot.service.js';
 
 export interface CourseInstructorRef {
   assignmentId: string;
@@ -71,6 +90,12 @@ export interface CourseAssignmentView {
   confirmedAt: Date | null;
 }
 
+/** One ranked instructor of GET /courses/:id/candidates. */
+export interface CandidateView {
+  instructor: CourseAssignmentView['instructor'];
+  result: AssignmentCheckResult;
+}
+
 export interface CourseDetail extends CourseRow {
   cohort: { id: string; label: string } | null;
   timeWindow: { id: string; startsOn: IsoDate; endsOn: IsoDate } | null;
@@ -110,6 +135,8 @@ export class CoursesService {
     @InjectRepository(AssignmentEntity)
     private readonly assignments: Repository<Assignment>,
     private readonly ds: DataSource,
+    private readonly snapshots: SnapshotService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -232,6 +259,178 @@ export class CoursesService {
     };
   }
 
+  // --- Staffing of one course ----------------------------------------------
+
+  /** Instructors ranked for the course; those already on it are left out. */
+  async candidates(
+    id: string,
+    query: CandidatesQuery = {},
+  ): Promise<CandidateView[]> {
+    const course = await this.load(id);
+    const ctx = await this.contextFor(course);
+    const onCourse = new Set(
+      activeAssignments(course).map((a) => a.instructorId),
+    );
+    const ranked = rankCandidates(toCourseToStaff(course), ctx, {
+      includeInfeasible: query.all === 'true',
+    }).filter((c) => !onCourse.has(c.instructor.id));
+    return ranked
+      .slice(0, query.limit ?? 6)
+      .map((c) => toCandidateView(c, ctx.snapshot));
+  }
+
+  async check(
+    id: string,
+    instructorId: string,
+  ): Promise<AssignmentCheckResult> {
+    const course = await this.load(id);
+    const ctx = await this.contextFor(course);
+    const instructor = ctx.snapshot.instructors.get(instructorId);
+    if (!instructor) throw new NotFoundException('Ausbilder nicht gefunden.');
+    return checkInstructor(toCourseToStaff(course), instructor, ctx);
+  }
+
+  /**
+   * Proposes the instructor for the course. A failed hard rule is a 409 with
+   * the check in `details`, unless `force` is set; the stored `checkResult`
+   * keeps the reasons either way.
+   */
+  async assign(
+    id: string,
+    dto: AssignInstructorDto,
+    actor: AuthUser,
+  ): Promise<CourseAssignmentView> {
+    const course = await this.load(id);
+    if (
+      activeAssignments(course).some((a) => a.instructorId === dto.instructorId)
+    ) {
+      throw new ConflictException(
+        'Dieser Ausbilder ist dem Kurs bereits zugewiesen.',
+      );
+    }
+    const ctx = await this.contextFor(course);
+    const instructor = ctx.snapshot.instructors.get(dto.instructorId);
+    if (!instructor) throw new NotFoundException('Ausbilder nicht gefunden.');
+    const result = checkInstructor(toCourseToStaff(course), instructor, ctx);
+    if (!result.ok && !dto.force) {
+      const failed = result.hard.find((h) => !h.ok);
+      throw new ConflictException({
+        message: `Harte Regel verletzt: ${failed?.reason ?? 'unbekannt'}`,
+        details: { checkResult: result },
+      });
+    }
+    const assignment = this.assignments.create({
+      courseId: course.id,
+      instructorId: dto.instructorId,
+      role: dto.role ?? AssignmentRole.Lead,
+      status: AssignmentStatus.Proposed,
+      checkResult: result,
+      score: result.score,
+    });
+    await this.assignments.save(assignment);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'assignment',
+      entityId: assignment.id,
+      action: 'create',
+      after: snapshot(assignment),
+      summary: `hat ${instructor.firstName} ${instructor.lastName} dem Kurs ${courseLabel(course)} zugewiesen (Score ${result.score}${result.ok ? '' : ', harte Regel verletzt'})`,
+    });
+    return this.assignmentView(assignment.id);
+  }
+
+  async confirmAssignment(
+    assignmentId: string,
+    actor: AuthUser,
+  ): Promise<CourseAssignmentView> {
+    const assignment = await this.loadAssignment(assignmentId);
+    if (assignment.status !== AssignmentStatus.Proposed) {
+      throw new ConflictException(
+        'Nur vorgeschlagene Zuweisungen können bestätigt werden.',
+      );
+    }
+    const before = snapshot(assignment);
+    assignment.status = AssignmentStatus.Confirmed;
+    assignment.confirmedByUserId = actor.dbUserId;
+    assignment.confirmedAt = new Date();
+    await this.assignments.save(assignment);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'assignment',
+      entityId: assignment.id,
+      action: 'confirm',
+      before,
+      after: snapshot(assignment),
+      summary: `hat die Zuweisung von ${assignment.instructor.firstName} ${assignment.instructor.lastName} für ${courseLabel(assignment.course)} bestätigt`,
+    });
+    return this.assignmentView(assignment.id);
+  }
+
+  async removeAssignment(assignmentId: string, actor: AuthUser): Promise<void> {
+    const assignment = await this.loadAssignment(assignmentId);
+    await this.assignments.delete(assignment.id);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'assignment',
+      entityId: assignment.id,
+      action: 'delete',
+      before: snapshot(assignment),
+      summary: `hat die Zuweisung von ${assignment.instructor.firstName} ${assignment.instructor.lastName} für ${courseLabel(assignment.course)} aufgehoben`,
+    });
+  }
+
+  /** Snapshot and ledger around the course's dates; apprentices are not needed for staffing. */
+  private async contextFor(course: Course): Promise<EngineContext> {
+    const dates = sortedDates(course);
+    const today = new Date().toISOString().slice(0, 10);
+    const range = dates.length
+      ? { from: dates[0], to: dates[dates.length - 1] }
+      : { from: today, to: today };
+    const snap = await this.snapshots.load(range, {
+      includeApprentices: false,
+    });
+    return {
+      snapshot: snap,
+      ledger: Ledger.fromSnapshot(snap),
+      today: snap.asOf,
+    };
+  }
+
+  private async loadAssignment(id: string): Promise<Assignment> {
+    const assignment = await this.assignments.findOne({
+      where: { id },
+      relations: {
+        instructor: { homeLocation: true },
+        course: { courseType: true, location: true, days: true },
+      },
+    });
+    if (!assignment) throw new NotFoundException('Zuweisung nicht gefunden.');
+    return assignment;
+  }
+
+  private async assignmentView(id: string): Promise<CourseAssignmentView> {
+    const a = await this.loadAssignment(id);
+    return {
+      id: a.id,
+      instructor: {
+        id: a.instructor.id,
+        firstName: a.instructor.firstName,
+        lastName: a.instructor.lastName,
+        employmentType: a.instructor.employmentType,
+        homeLocation: {
+          id: a.instructor.homeLocation.id,
+          code: a.instructor.homeLocation.code,
+          name: a.instructor.homeLocation.name,
+        },
+      },
+      role: a.role,
+      status: a.status,
+      score: a.score,
+      checkResult: a.checkResult,
+      confirmedAt: a.confirmedAt,
+    };
+  }
+
   /** The course with its days, or 404. */
   async load(id: string): Promise<Course> {
     const course = await this.courses.findOne({
@@ -316,4 +515,55 @@ export class CoursesService {
       };
     });
   }
+}
+
+function sortedDates(course: Course): IsoDate[] {
+  return course.days.map((d) => d.heldOn).sort();
+}
+
+function activeAssignments(course: Course): Assignment[] {
+  return course.assignments.filter((a) =>
+    ACTIVE_ASSIGNMENTS.includes(a.status),
+  );
+}
+
+/** «E2EA-UK Rupperswil KW 9», as the audit entries name a course. */
+function courseLabel(course: Course): string {
+  const dates = sortedDates(course);
+  const week = dates.length ? `KW ${isoWeek(dates[0]).week}` : 'ohne Termin';
+  return `${course.courseType.code} ${course.location.name} ${week}`;
+}
+
+export function toCourseToStaff(course: Course): CourseToStaff {
+  return {
+    id: course.id,
+    courseTypeId: course.courseTypeId,
+    locationId: course.locationId,
+    language: course.language,
+    cohortId: course.cohortId,
+    dates: sortedDates(course),
+    coInstructorIds: activeAssignments(course).map((a) => a.instructorId),
+  };
+}
+
+function toCandidateView(
+  candidate: Candidate,
+  snap: PlanningSnapshot,
+): CandidateView {
+  const i = candidate.instructor;
+  const home = snap.locations.get(i.homeLocationId);
+  return {
+    instructor: {
+      id: i.id,
+      firstName: i.firstName,
+      lastName: i.lastName,
+      employmentType: i.employmentType,
+      homeLocation: {
+        id: i.homeLocationId,
+        code: home?.code ?? '',
+        name: home?.name ?? '',
+      },
+    },
+    result: candidate.result,
+  };
 }

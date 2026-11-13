@@ -217,7 +217,7 @@ describe('Courses (e2e)', () => {
       .get('/courses/00000000-0000-4000-8000-000000000000')
       .set(asPlanner)
       .expect(404);
-    //  answers 404 for a malformed id, like an unknown one.
+    // `uuidPipe` answers 404 for a malformed id, like an unknown one.
     await api().get('/courses/not-a-uuid').set(asPlanner).expect(404);
     await api().get(`/courses/${courseA}`).expect(401);
   });

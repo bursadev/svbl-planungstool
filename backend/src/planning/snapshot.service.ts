@@ -64,7 +64,8 @@ function groupBy<T, K>(rows: T[], key: (row: T) => K): Map<K, T[]> {
  * handful of bulk queries: the catalogue and master data completely, courses
  * of the calendar years the range touches (the maintenance rule counts per
  * year), availabilities around the range, active apprentices with the school
- * days of the range's school year.
+ * days of the range's school year (`includeApprentices: false` skips the
+ * apprentice side for staffing checks of single courses).
  */
 @Injectable()
 export class SnapshotService {
@@ -72,8 +73,9 @@ export class SnapshotService {
 
   async load(
     range: { from: IsoDate; to: IsoDate },
-    opts: { today?: IsoDate } = {},
+    opts: { today?: IsoDate; includeApprentices?: boolean } = {},
   ): Promise<PlanningSnapshot> {
+    const withApprentices = opts.includeApprentices ?? true;
     const today = opts.today ?? new Date().toISOString().slice(0, 10);
     const firstYear = Number(range.from.slice(0, 4));
     const lastYear = Number(range.to.slice(0, 4));
@@ -137,12 +139,16 @@ export class SnapshotService {
       r(Device).find(),
       r(DeviceMove).find(),
       r(MaintenanceWindow).find(),
-      r(VocationalSchool).find(),
-      r(SchoolClass).find(),
-      r(SchoolClassDay).find({
-        where: { schoolYearStart: LessThanOrEqual(schoolYear) },
-      }),
-      r(Apprentice).find({ where: { status: ApprenticeStatus.Active } }),
+      withApprentices ? r(VocationalSchool).find() : [],
+      withApprentices ? r(SchoolClass).find() : [],
+      withApprentices
+        ? r(SchoolClassDay).find({
+            where: { schoolYearStart: LessThanOrEqual(schoolYear) },
+          })
+        : [],
+      withApprentices
+        ? r(Apprentice).find({ where: { status: ApprenticeStatus.Active } })
+        : [],
       r(Setting).findOneBy({ key: WEIGHTS_SETTING }),
     ]);
 
@@ -166,11 +172,15 @@ export class SnapshotService {
             [courseIds],
           ) as Promise<{ course_id: string; apprentice_id: string }[]>)
         : Promise.resolve([]),
-      this.ds.query(
-        `SELECT DISTINCT e.apprentice_id, c.course_type_id
-         FROM enrollment e JOIN course c ON c.id = e.course_id
-         WHERE e.status IN ('registered', 'confirmed', 'attended') AND c.status <> 'cancelled'`,
-      ) as Promise<{ apprentice_id: string; course_type_id: string }[]>,
+      withApprentices
+        ? (this.ds.query(
+            `SELECT DISTINCT e.apprentice_id, c.course_type_id
+             FROM enrollment e JOIN course c ON c.id = e.course_id
+             WHERE e.status IN ('registered', 'confirmed', 'attended') AND c.status <> 'cancelled'`,
+          ) as Promise<{ apprentice_id: string; course_type_id: string }[]>)
+        : Promise.resolve(
+            [] as { apprentice_id: string; course_type_id: string }[],
+          ),
     ]);
 
     const skillsOfType = groupBy(typeSkills, (x) => x.courseTypeId);
