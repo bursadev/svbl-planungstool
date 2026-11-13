@@ -64,6 +64,40 @@ const STATUS_LABELS: Record<AvailabilityStatus, string> = {
 
 const ACTIVE = new Set([AssignmentStatus.Confirmed, AssignmentStatus.Proposed]);
 
+/** Per snapshot: cohort → instructor → ids of its courses with an active assignment. */
+const continuityCache = new WeakMap<
+  PlanningSnapshot,
+  Map<string, Map<string, Set<string>>>
+>();
+
+function continuityIndex(
+  snapshot: PlanningSnapshot,
+): Map<string, Map<string, Set<string>>> {
+  let index = continuityCache.get(snapshot);
+  if (!index) {
+    index = new Map();
+    for (const c of snapshot.courses.values()) {
+      if (!c.cohortId || c.status === CourseStatus.Cancelled) continue;
+      let byInstructor = index.get(c.cohortId);
+      if (!byInstructor) {
+        byInstructor = new Map();
+        index.set(c.cohortId, byInstructor);
+      }
+      for (const a of c.assignments) {
+        if (!ACTIVE.has(a.status)) continue;
+        let ids = byInstructor.get(a.instructorId);
+        if (!ids) {
+          ids = new Set();
+          byInstructor.set(a.instructorId, ids);
+        }
+        ids.add(c.id);
+      }
+    }
+    continuityCache.set(snapshot, index);
+  }
+  return index;
+}
+
 /** «+30» / «−10» with the typographic minus, as the prototype prints it. */
 function signed(delta: number): string {
   return delta < 0 ? `−${-delta}` : `+${delta}`;
@@ -349,15 +383,11 @@ export function checkInstructor(
 
   // Soft: continuity with the cohort
   if (course.cohortId) {
-    const knows = [...snapshot.courses.values()].some(
-      (c) =>
-        c.id !== course.id &&
-        c.cohortId === course.cohortId &&
-        c.status !== CourseStatus.Cancelled &&
-        c.assignments.some(
-          (a) => a.instructorId === instructor.id && ACTIVE.has(a.status),
-        ),
-    );
+    const known = continuityIndex(snapshot)
+      .get(course.cohortId)
+      ?.get(instructor.id);
+    const knows =
+      known !== undefined && [...known].some((id) => id !== course.id);
     if (knows) {
       const label =
         snapshot.cohorts.get(course.cohortId)?.label ?? course.cohortId;

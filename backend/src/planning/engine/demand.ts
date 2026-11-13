@@ -83,7 +83,7 @@ export function sizeCourses(
   return Array.from({ length: k }, (_, i) => base + (i < rest ? 1 : 0));
 }
 
-function compareGroups(
+export function compareGroups(
   snapshot: PlanningSnapshot,
   a: DemandGroup,
   b: DemandGroup,

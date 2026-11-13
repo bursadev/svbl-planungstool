@@ -8,10 +8,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Not, Repository } from 'typeorm';
 import { Enrollment } from '../apprentices/enrollment.entity.js';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
+import type { AssignmentCheckResult } from '../courses/assignment.entity.js';
+import { CourseDay } from '../courses/course-day.entity.js';
 import { Course } from '../courses/course.entity.js';
 import {
+  AssignmentStatus,
+  CourseStatus,
   DemandSource,
   DemandStatus,
+  EnrollmentChannel,
+  EnrollmentStatus,
   Language,
   PlanningRunStage,
   PlanningRunStatus,
@@ -20,8 +26,16 @@ import { AuditService } from '../system/audit.service.js';
 import { DemandApprentice } from './demand-apprentice.entity.js';
 import { Demand } from './demand.entity.js';
 import type { CreatePlanningRunDto } from './dto/planning-run.dto.js';
-import { addDays, schoolYearStart } from './engine/calendar.js';
-import { generateDemand, mergeGroups } from './engine/demand.js';
+import { addDays, isoWeek, schoolYearStart } from './engine/calendar.js';
+import {
+  compareGroups,
+  generateDemand,
+  mergeGroups,
+  sizeCourses,
+  type DemandGroup,
+} from './engine/demand.js';
+import { Ledger } from './engine/ledger.js';
+import { proposeCourses } from './engine/propose.js';
 import { checkReadiness, VARIANT_MODULE_RE } from './engine/readiness.js';
 import type {
   DemandSummary,
@@ -78,6 +92,39 @@ export interface DemandView {
   coursesNeeded: number;
   note: string | null;
 }
+
+/** One draft course of GET /planning-runs/:id/courses. */
+export interface RunCourseView {
+  id: string;
+  demandId: string | null;
+  courseType: { id: string; code: string; name: string; durationDays: number };
+  cohort: { id: string; label: string } | null;
+  location: { id: string; code: string; name: string };
+  language: Language;
+  isoWeek: number | null;
+  dates: IsoDate[];
+  room: { id: string; name: string } | null;
+  seats: number;
+  booked: number;
+  blockedWeekdays: number[];
+  /** Why the course could not be placed; null for placed courses. */
+  planningIssue: string | null;
+  /** The slot's reasons («Raum T1 reserviert», «Schultag Mo ausgespart»). */
+  reasons: string[];
+  proposedInstructor: {
+    assignmentId: string;
+    id: string;
+    firstName: string;
+    lastName: string;
+    score: number | null;
+    why: string;
+    candidateCount: number | null;
+  } | null;
+  staffingIssue: string | null;
+}
+
+/** Marks the staffing reason inside `course.notes` next to the slot reasons. */
+export const STAFFING_NOTE = 'Besetzung: ';
 
 /** The intake numbers above the list of runs. */
 export interface PlanningOverview {
@@ -399,6 +446,216 @@ export class PlanningRunsService {
       );
   }
 
+  // --- Stage 2: courses and dates ---------------------------------------------
+
+  /**
+   * Replaces the run's draft courses: every demand group gets its courses
+   * placed by the engine (dates, room), the members are packed into them
+   * (or into existing courses with free seats) as draft enrollments.
+   */
+  async proposeCourses(id: string, actor: AuthUser): Promise<RunCourseView[]> {
+    const run = await this.loadDraft(id);
+    const demands = await this.demands.find({
+      where: { planningRunId: id },
+      relations: { members: true, timeWindow: true },
+    });
+    if (demands.length === 0)
+      throw new ConflictException('Zuerst den Bedarf erzeugen.');
+    const period = { startsOn: run.periodStartsOn, endsOn: run.periodEndsOn };
+    // Earlier drafts of this run go first, so the snapshot does not see them.
+    await this.ds.transaction(async (em) => {
+      await em.delete(Course, { planningRunId: id });
+      await em.delete(Enrollment, { planningRunId: id });
+    });
+    const snapshot = await this.snapshots.load({
+      from: period.startsOn,
+      to: period.endsOn,
+    });
+    const groups: DemandGroup[] = demands
+      .map((d) => {
+        const type = snapshot.courseTypes.get(d.courseTypeId);
+        return {
+          key: d.id,
+          cohortId: d.cohortId ?? '',
+          moduleId: d.curriculumModuleId ?? '',
+          courseTypeId: d.courseTypeId,
+          timeWindowId: d.timeWindowId,
+          window: d.timeWindow
+            ? { startsOn: d.timeWindow.startsOn, endsOn: d.timeWindow.endsOn }
+            : period,
+          locationId: d.locationId,
+          language: d.language,
+          blockedWeekdays: d.blockedWeekdays,
+          memberIds: d.members.map((m) => m.apprenticeId).sort(),
+          classIds: [],
+          existingFreeSeats: d.existingFreeSeats,
+          participantCount: d.participantCount,
+          coursesNeeded: d.coursesNeeded,
+          sizes: sizeCourses(
+            d.participantCount,
+            type?.maxParticipants ?? 12,
+            type?.minParticipants ?? null,
+          ),
+          notes: [],
+        };
+      })
+      .sort((a, b) => compareGroups(snapshot, a, b));
+    const ctx = {
+      snapshot,
+      ledger: Ledger.fromSnapshot(snapshot),
+      today: snapshot.asOf,
+    };
+    const soonest = addDays(snapshot.asOf, 7);
+    const result = proposeCourses(groups, ctx, {
+      notBefore: soonest > period.startsOn ? soonest : period.startsOn,
+    });
+    await this.ds.transaction(async (em) => {
+      const idOf = new Map<string, string>();
+      for (const c of result.courses) {
+        const course = em.create(Course, {
+          courseTypeId: c.courseTypeId,
+          locationId: c.locationId,
+          language: c.language,
+          cohortId: c.cohortId || null,
+          timeWindowId: c.timeWindowId,
+          demandId: c.demandKey,
+          planningRunId: id,
+          capacity: c.seats,
+          status: CourseStatus.Demand,
+          planningIssue: c.issue,
+          notes: c.reasons.length ? c.reasons.join(' · ') : null,
+          createdByUserId: actor.dbUserId,
+        });
+        await em.save(course);
+        idOf.set(c.key, course.id);
+        if (c.dates.length) {
+          await em.insert(
+            CourseDay,
+            c.dates.map((heldOn, i) => ({
+              courseId: course.id,
+              heldOn,
+              startsAt: '08:15',
+              endsAt: '16:45',
+              sequence: i + 1,
+              roomId: c.roomId,
+            })),
+          );
+        }
+      }
+      const enrollments = result.placements.map((p) => ({
+        courseId: p.courseKey ? idOf.get(p.courseKey)! : p.existingCourseId!,
+        apprenticeId: p.apprenticeId,
+        status: EnrollmentStatus.Registered,
+        enrolledVia: EnrollmentChannel.Planner,
+        enrolledByUserId: actor.dbUserId,
+        planningRunId: id,
+      }));
+      for (let i = 0; i < enrollments.length; i += 500) {
+        await em.insert(Enrollment, enrollments.slice(i, i + 500));
+      }
+      await em.update(PlanningRun, { id }, { stage: PlanningRunStage.Courses });
+    });
+    const placed = result.courses.filter((c) => c.issue === null).length;
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'planning_run',
+      entityId: id,
+      action: 'courses',
+      after: {
+        courses: result.courses.length,
+        placed,
+        unplannable: result.courses.length - placed,
+        placements: result.placements.length,
+        unassigned: result.unassigned.length,
+      },
+      summary: `hat für Planungslauf «${run.label}» ${result.courses.length} Kurse vorgeschlagen (${result.courses.length - placed} nicht planbar, ${result.unassigned.length} Lernende ohne Platz)`,
+    });
+    return this.listRunCourses(id);
+  }
+
+  async listRunCourses(id: string): Promise<RunCourseView[]> {
+    await this.load(id);
+    const courses = await this.courses.find({
+      where: { planningRunId: id },
+      relations: {
+        courseType: true,
+        location: true,
+        cohort: true,
+        days: { room: true },
+        assignments: { instructor: true },
+        demand: { curriculumModule: true },
+      },
+    });
+    const booked: { course_id: string; n: string }[] = courses.length
+      ? await this.ds.query(
+          `SELECT course_id, COUNT(*) AS n FROM enrollment
+           WHERE course_id = ANY($1) AND status IN ('registered', 'confirmed') GROUP BY course_id`,
+          [courses.map((c) => c.id)],
+        )
+      : [];
+    const bookedOf = new Map(booked.map((b) => [b.course_id, Number(b.n)]));
+    return courses
+      .map((c): RunCourseView => {
+        const days = [...c.days].sort((a, b) =>
+          a.heldOn.localeCompare(b.heldOn),
+        );
+        const notes = (c.notes ?? '').split(' · ').filter(Boolean);
+        const staffing = notes.find((n) => n.startsWith(STAFFING_NOTE));
+        const assignment = c.assignments.find(
+          (a) =>
+            a.status === AssignmentStatus.Proposed ||
+            a.status === AssignmentStatus.Confirmed,
+        );
+        return {
+          id: c.id,
+          demandId: c.demandId,
+          courseType: {
+            id: c.courseType.id,
+            code: c.courseType.code,
+            name: c.courseType.name,
+            durationDays: c.courseType.durationDays,
+          },
+          cohort: c.cohort ? { id: c.cohort.id, label: c.cohort.label } : null,
+          location: {
+            id: c.location.id,
+            code: c.location.code,
+            name: c.location.name,
+          },
+          language: c.language,
+          isoWeek: days.length ? isoWeek(days[0].heldOn).week : null,
+          dates: days.map((d) => d.heldOn),
+          room: days[0]?.room
+            ? { id: days[0].room.id, name: days[0].room.name }
+            : null,
+          seats: c.capacity,
+          booked: bookedOf.get(c.id) ?? 0,
+          blockedWeekdays: c.demand?.blockedWeekdays ?? [],
+          planningIssue: c.planningIssue,
+          reasons: notes.filter((n) => !n.startsWith(STAFFING_NOTE)),
+          proposedInstructor: assignment
+            ? {
+                assignmentId: assignment.id,
+                id: assignment.instructor.id,
+                firstName: assignment.instructor.firstName,
+                lastName: assignment.instructor.lastName,
+                score: assignment.score,
+                why: whyOf(assignment.checkResult),
+                candidateCount: candidateCountOf(assignment.note),
+              }
+            : null,
+          staffingIssue: staffing ? staffing.slice(STAFFING_NOTE.length) : null,
+        };
+      })
+      .sort(
+        (a, b) =>
+          (a.cohort?.label ?? '').localeCompare(b.cohort?.label ?? '') ||
+          a.courseType.code.localeCompare(b.courseType.code) ||
+          a.location.code.localeCompare(b.location.code) ||
+          (a.dates[0] ?? '9999').localeCompare(b.dates[0] ?? '9999') ||
+          a.id.localeCompare(b.id),
+      );
+  }
+
   /** The run, or 409 when it is no longer a draft. */
   async loadDraft(id: string): Promise<PlanningRun> {
     const run = await this.load(id);
@@ -487,4 +744,20 @@ function toView(
     createdBy: run.createdByUser?.displayName ?? null,
     counts: counts ?? EMPTY_COUNTS,
   };
+}
+
+/** The first two positive soft reasons without their «(+n)» suffix. */
+function whyOf(result: AssignmentCheckResult | null): string {
+  if (!result) return '';
+  return result.soft
+    .filter((s) => s.delta > 0)
+    .slice(0, 2)
+    .map((s) => s.text.replace(/\s\(.*\)$/, ''))
+    .join(' · ');
+}
+
+/** `assignment.note` of the staffing stage reads «n machbare Kandidaten». */
+function candidateCountOf(note: string | null): number | null {
+  const match = note ? /^(\d+) machbare/.exec(note) : null;
+  return match ? Number(match[1]) : null;
 }

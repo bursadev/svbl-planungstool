@@ -280,6 +280,83 @@ describe('Planning runs (e2e)', () => {
     expect(again.body.map((d: { id: string }) => d.id)).not.toContain(
       ours[0].id,
     );
+    // Stage 2: courses and dates. Three apprentices, max 2 per course → two courses on free days.
+    await api()
+      .post(`/planning-runs/${ids.run}/courses`)
+      .set(asInstructor)
+      .expect(403);
+    const proposed = await api()
+      .post(`/planning-runs/${ids.run}/courses`)
+      .set(asPlanner)
+      .expect(200);
+    const ourCourses = proposed.body.filter(
+      (c: { courseType: { code: string } }) => c.courseType.code === 'E2ER-UK',
+    );
+    expect(ourCourses).toHaveLength(2);
+    for (const course of ourCourses) {
+      expect(course).toMatchObject({
+        location: { code: 'E2ER-LOC' },
+        language: 'de',
+        room: { name: 'E2ER Raum' },
+        blockedWeekdays: [2],
+        planningIssue: null,
+        proposedInstructor: null,
+        staffingIssue: null,
+      });
+      expect(course.dates).toHaveLength(1);
+      expect(new Date(course.dates[0]).getUTCDay()).not.toBe(2);
+      expect(
+        course.dates[0] >= '2087-08-01' && course.dates[0] <= '2088-01-31',
+      ).toBe(true);
+      expect(course.reasons).toContain('Raum E2ER Raum reserviert');
+    }
+    expect(
+      ourCourses.map((c: { seats: number; booked: number }) => [
+        c.seats,
+        c.booked,
+      ]),
+    ).toEqual([
+      [2, 2],
+      [1, 1],
+    ]);
+    const afterCourses = await api()
+      .get(`/planning-runs/${ids.run}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(afterCourses.body.stage).toBe('courses');
+    expect(afterCourses.body.counts.coursesProposed).toBeGreaterThanOrEqual(2);
+    expect(afterCourses.body.counts.unassignedApprentices).toBe(0);
+    const drafts = await api()
+      .get(`/courses?planningRunId=${ids.run}&from=2087-01-01`)
+      .set(asPlanner)
+      .expect(200);
+    expect(
+      drafts.body.every((c: { status: string }) => c.status === 'demand'),
+    ).toBe(true);
+    expect(drafts.body.length).toBe(proposed.body.length);
+    const listedCourses = await api()
+      .get(`/planning-runs/${ids.run}/courses`)
+      .set(asInstructor)
+      .expect(200);
+    expect(listedCourses.body.map((c: { id: string }) => c.id).sort()).toEqual(
+      proposed.body.map((c: { id: string }) => c.id).sort(),
+    );
+
+    // A new demand drops every draft course and enrollment of the run.
+    await api()
+      .post(`/planning-runs/${ids.run}/demand`)
+      .set(asPlanner)
+      .expect(200);
+    const afterReset = await api()
+      .get(`/planning-runs/${ids.run}/courses`)
+      .set(asPlanner)
+      .expect(200);
+    expect(afterReset.body).toEqual([]);
+    const [{ n }] = await ds.query(
+      `SELECT COUNT(*)::int AS n FROM enrollment WHERE planning_run_id = $1`,
+      [ids.run],
+    );
+    expect(n).toBe(0);
 
     await api()
       .delete(`/planning-runs/${ids.run}`)

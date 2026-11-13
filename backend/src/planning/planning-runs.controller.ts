@@ -50,6 +50,22 @@ export class PlanningRunsController {
     return this.runs.listDemand(id);
   }
 
+  /** Stage 2: proposes dates, rooms and the apprentices' seats for every demand group. */
+  @Post(':id/courses')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  proposeCourses(
+    @Param('id', uuidPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.runs.proposeCourses(id, user);
+  }
+
+  @Get(':id/courses')
+  listRunCourses(@Param('id', uuidPipe) id: string) {
+    return this.runs.listRunCourses(id);
+  }
+
   /** Discards a draft run with all its drafts; a committed run is a 409. */
   @Delete(':id')
   @Roles(...WRITE_ROLES)
