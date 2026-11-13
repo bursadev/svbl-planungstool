@@ -24,7 +24,6 @@ pnpm start:dev         # http://localhost:3001
 | `pnpm migration:run` / `pnpm migration:revert` | Apply / roll back migrations |
 | `pnpm seed` | Wipe all domain tables and load the prototype's demo data (development only) |
 | `pnpm seed:users` | Create / update the two Clerk demo accounts (planner + instructor) in the development instance |
-| `pnpm import:odaorg` | Wipe all domain tables (users and settings are kept) and load the OdAOrg data crawled into `tools/odaorg-crawler/out/`; `--dry-run` only prints the counts, `--active-since YYYY-MM-DD` sets the date from which an instructor counts as active (default: 1 August of the previous school year). See `docs/odaorg/site-analysis.md` and `tools/odaorg-crawler/README.md` |
 
 `synchronize` is off, so schema changes always go through migrations. Entities are picked up automatically from any `*.entity.ts` file under `src/`. Connection settings are shared between the app and the TypeORM CLI in `src/database/database.options.ts`.
 
