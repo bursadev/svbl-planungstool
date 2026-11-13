@@ -6,12 +6,22 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Not, Repository } from 'typeorm';
+import { Enrollment } from '../apprentices/enrollment.entity.js';
 import type { AuthUser } from '../auth/clerk-auth.guard.js';
 import { Course } from '../courses/course.entity.js';
-import { PlanningRunStatus } from '../database/enums.js';
+import {
+  DemandSource,
+  DemandStatus,
+  Language,
+  PlanningRunStage,
+  PlanningRunStatus,
+} from '../database/enums.js';
 import { AuditService } from '../system/audit.service.js';
+import { DemandApprentice } from './demand-apprentice.entity.js';
+import { Demand } from './demand.entity.js';
 import type { CreatePlanningRunDto } from './dto/planning-run.dto.js';
 import { addDays, schoolYearStart } from './engine/calendar.js';
+import { generateDemand, mergeGroups } from './engine/demand.js';
 import { checkReadiness, VARIANT_MODULE_RE } from './engine/readiness.js';
 import type {
   DemandSummary,
@@ -44,6 +54,29 @@ export interface PlanningRunView {
   committedAt: Date | null;
   createdBy: string | null;
   counts: PlanningRunCounts;
+}
+
+/** One demand group of GET /planning-runs/:id/demand. */
+export interface DemandView {
+  id: string;
+  cohort: { id: string; label: string };
+  module: {
+    id: string;
+    code: string;
+    name: string;
+    semester: number;
+    durationDays: number;
+  };
+  location: { id: string; code: string; name: string };
+  language: Language;
+  schoolWeekday: number | null;
+  blockedWeekdays: number[];
+  window: { startsOn: IsoDate; endsOn: IsoDate; fromTimeWindow: boolean };
+  participantCount: number;
+  memberCount: number;
+  existingFreeSeats: number;
+  coursesNeeded: number;
+  note: string | null;
 }
 
 /** The intake numbers above the list of runs. */
@@ -82,6 +115,7 @@ export class PlanningRunsService {
     @InjectRepository(PlanningRun)
     private readonly runs: Repository<PlanningRun>,
     @InjectRepository(Course) private readonly courses: Repository<Course>,
+    @InjectRepository(Demand) private readonly demands: Repository<Demand>,
     private readonly ds: DataSource,
     private readonly snapshots: SnapshotService,
     private readonly audit: AuditService,
@@ -224,6 +258,156 @@ export class PlanningRunsService {
       unstaffedCourses: unstaffed.n,
       modulesWithoutTimeWindow: windows.n,
     };
+  }
+
+  // --- Stage 1: demand ------------------------------------------------------
+
+  /**
+   * Replaces the run's demand (and every later draft) with the groups the
+   * engine derives from the cohorts, the curriculum and the school days.
+   */
+  async generateDemand(id: string, actor: AuthUser): Promise<DemandView[]> {
+    const run = await this.loadDraft(id);
+    const period = { startsOn: run.periodStartsOn, endsOn: run.periodEndsOn };
+    const snapshot = await this.snapshots.load({
+      from: period.startsOn,
+      to: period.endsOn,
+    });
+    const result = generateDemand(snapshot, period);
+    const groups = mergeGroups(result.groups, snapshot);
+    const summary: DemandSummary = {
+      generatedAt: new Date().toISOString(),
+      catchUps: result.catchUps,
+      skippedVariantModules: result.skippedVariantModules,
+      apprenticesWithoutClass: result.apprenticesWithoutClass,
+    };
+    await this.ds.transaction(async (em) => {
+      await em.delete(Course, { planningRunId: id });
+      await em.delete(Enrollment, { planningRunId: id });
+      await em.delete(Demand, { planningRunId: id });
+      for (const group of groups) {
+        const demand = em.create(Demand, {
+          planningRunId: id,
+          cohortId: group.cohortId,
+          curriculumModuleId: group.moduleId,
+          courseTypeId: group.courseTypeId,
+          timeWindowId: group.timeWindowId,
+          locationId: group.locationId,
+          language: group.language,
+          schoolWeekday: group.blockedWeekdays[0] ?? null,
+          blockedWeekdays: group.blockedWeekdays,
+          participantCount: group.participantCount,
+          coursesNeeded: group.coursesNeeded,
+          existingFreeSeats: group.existingFreeSeats,
+          source: DemandSource.SchoolImport,
+          status: DemandStatus.Open,
+          note: group.notes.join(' · ') || null,
+        });
+        await em.save(demand);
+        if (group.memberIds.length) {
+          await em.insert(
+            DemandApprentice,
+            group.memberIds.map((apprenticeId) => ({
+              demandId: demand.id,
+              apprenticeId,
+            })),
+          );
+        }
+      }
+      await em.update(
+        PlanningRun,
+        { id },
+        { stage: PlanningRunStage.Demand, demandSummary: summary },
+      );
+    });
+    const coursesNeeded = groups.reduce((n, g) => n + g.coursesNeeded, 0);
+    await this.audit.record({
+      actorUserId: actor.dbUserId,
+      entityType: 'planning_run',
+      entityId: id,
+      action: 'demand',
+      after: { groups: groups.length, coursesNeeded, ...summary },
+      summary: `hat den Bedarf für Planungslauf «${run.label}» erzeugt (${groups.length} Gruppen, ${coursesNeeded} Kurse)`,
+    });
+    return this.listDemand(id);
+  }
+
+  async listDemand(id: string): Promise<DemandView[]> {
+    const run = await this.load(id);
+    const demands = await this.demands.find({
+      where: { planningRunId: id },
+      relations: {
+        cohort: true,
+        curriculumModule: { courseType: true },
+        location: true,
+        timeWindow: true,
+      },
+    });
+    const members: { demand_id: string; n: string }[] = demands.length
+      ? await this.ds.query(
+          `SELECT demand_id, COUNT(*) AS n FROM demand_apprentice WHERE demand_id = ANY($1) GROUP BY demand_id`,
+          [demands.map((d) => d.id)],
+        )
+      : [];
+    const memberCount = new Map(members.map((m) => [m.demand_id, Number(m.n)]));
+    return demands
+      .map((d) => ({
+        id: d.id,
+        cohort: { id: d.cohort!.id, label: d.cohort!.label },
+        module: {
+          id: d.curriculumModule!.id,
+          code: d.curriculumModule!.courseType.code,
+          name: d.curriculumModule!.courseType.name,
+          semester: d.curriculumModule!.semester,
+          durationDays: d.curriculumModule!.courseType.durationDays,
+        },
+        location: {
+          id: d.location.id,
+          code: d.location.code,
+          name: d.location.name,
+        },
+        language: d.language,
+        schoolWeekday: d.schoolWeekday,
+        blockedWeekdays: d.blockedWeekdays,
+        window: d.timeWindow
+          ? {
+              startsOn: d.timeWindow.startsOn,
+              endsOn: d.timeWindow.endsOn,
+              fromTimeWindow: true,
+            }
+          : {
+              startsOn: run.periodStartsOn,
+              endsOn: run.periodEndsOn,
+              fromTimeWindow: false,
+            },
+        participantCount: d.participantCount,
+        memberCount: memberCount.get(d.id) ?? 0,
+        existingFreeSeats: d.existingFreeSeats,
+        coursesNeeded: d.coursesNeeded,
+        note: d.note,
+      }))
+      .sort(
+        (a, b) =>
+          a.cohort.label.localeCompare(b.cohort.label) ||
+          a.module.semester - b.module.semester ||
+          a.module.code.localeCompare(b.module.code) ||
+          a.location.code.localeCompare(b.location.code) ||
+          a.language.localeCompare(b.language) ||
+          a.blockedWeekdays
+            .join('+')
+            .localeCompare(b.blockedWeekdays.join('+')),
+      );
+  }
+
+  /** The run, or 409 when it is no longer a draft. */
+  async loadDraft(id: string): Promise<PlanningRun> {
+    const run = await this.load(id);
+    if (run.status !== PlanningRunStatus.Draft) {
+      throw new ConflictException(
+        'Der Planungslauf ist bereits übernommen oder verworfen.',
+      );
+    }
+    return run;
   }
 
   async load(id: string): Promise<PlanningRun> {

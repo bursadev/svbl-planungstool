@@ -39,14 +39,12 @@ describe('Planning runs (e2e)', () => {
       })
     ).id;
     ids.room = (
-      await ds
-        .getRepository(Room)
-        .save({
-          locationId: ids.location,
-          name: 'E2ER Raum',
-          kind: 'theory',
-          capacity: 12,
-        })
+      await ds.getRepository(Room).save({
+        locationId: ids.location,
+        name: 'E2ER Raum',
+        kind: 'theory',
+        capacity: 12,
+      })
     ).id;
     ids.courseType = (
       await ds.getRepository(CourseType).save({
@@ -65,14 +63,12 @@ describe('Planning runs (e2e)', () => {
         .save({ track: 'efz', startYear: 2087, label: 'E2ER 2087 EFZ' })
     ).id;
     ids.module = (
-      await ds
-        .getRepository(CurriculumModule)
-        .save({
-          track: 'efz',
-          courseTypeId: ids.courseType,
-          semester: 1,
-          sequence: 9902,
-        })
+      await ds.getRepository(CurriculumModule).save({
+        track: 'efz',
+        courseTypeId: ids.courseType,
+        semester: 1,
+        sequence: 9902,
+      })
     ).id;
     ids.school = (
       await ds.getRepository(VocationalSchool).save({
@@ -83,14 +79,12 @@ describe('Planning runs (e2e)', () => {
       })
     ).id;
     ids.class = (
-      await ds
-        .getRepository(SchoolClass)
-        .save({
-          vocationalSchoolId: ids.school,
-          code: 'E2ER-K1',
-          track: 'efz',
-          startYear: 2087,
-        })
+      await ds.getRepository(SchoolClass).save({
+        vocationalSchoolId: ids.school,
+        code: 'E2ER-K1',
+        track: 'efz',
+        startYear: 2087,
+      })
     ).id;
     await ds
       .getRepository(SchoolClassDay)
@@ -232,6 +226,60 @@ describe('Planning runs (e2e)', () => {
       modulesWithoutTimeWindow: expect.any(Number),
     });
     expect(overview.body.apprenticesWithoutFutureUk).toBeGreaterThanOrEqual(3);
+    // Stage 1: demand. The E2ER cohort is in semester 1, so the real semester-1 modules appear too.
+    await api()
+      .post(`/planning-runs/${ids.run}/demand`)
+      .set(asInstructor)
+      .expect(403);
+    const demand = await api()
+      .post(`/planning-runs/${ids.run}/demand`)
+      .set(asPlanner)
+      .expect(200);
+    const ours = demand.body.filter(
+      (d: { module: { code: string } }) => d.module.code === 'E2ER-UK',
+    );
+    expect(ours).toHaveLength(1);
+    expect(ours[0]).toMatchObject({
+      cohort: { label: 'E2ER 2087 EFZ' },
+      module: { code: 'E2ER-UK', semester: 1, durationDays: 1 },
+      location: { code: 'E2ER-LOC' },
+      language: 'de',
+      schoolWeekday: 2,
+      blockedWeekdays: [2],
+      window: {
+        startsOn: '2087-08-01',
+        endsOn: '2088-01-31',
+        fromTimeWindow: false,
+      },
+      participantCount: 3,
+      memberCount: 3,
+      existingFreeSeats: 0,
+      coursesNeeded: 2,
+    });
+    expect(ours[0].note).toContain('Schultag-Gruppen zusammengelegt');
+    const afterDemand = await api()
+      .get(`/planning-runs/${ids.run}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(afterDemand.body.stage).toBe('demand');
+    expect(afterDemand.body.demandSummary).toMatchObject({
+      catchUps: 0,
+      apprenticesWithoutClass: 1,
+    });
+    expect(afterDemand.body.counts.apprentices).toBe(3);
+    expect(afterDemand.body.counts.demandGroups).toBeGreaterThanOrEqual(1);
+    const listed = await api()
+      .get(`/planning-runs/${ids.run}/demand`)
+      .set(asInstructor)
+      .expect(200);
+    expect(listed.body.map((d: { id: string }) => d.id)).toContain(ours[0].id);
+    const again = await api()
+      .post(`/planning-runs/${ids.run}/demand`)
+      .set(asPlanner)
+      .expect(200);
+    expect(again.body.map((d: { id: string }) => d.id)).not.toContain(
+      ours[0].id,
+    );
 
     await api()
       .delete(`/planning-runs/${ids.run}`)

@@ -18,6 +18,8 @@ import {
   DEMAND_STATUS_ENUM,
   DemandSource,
   DemandStatus,
+  LANGUAGE_ENUM,
+  Language,
 } from '../database/enums.js';
 import { Location } from '../locations/location.entity.js';
 import { DemandApprentice } from './demand-apprentice.entity.js';
@@ -75,6 +77,10 @@ export class Demand extends BaseEntity {
   @ManyToOne(() => Location, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'location_id' })
   location: Relation<Location>;
+
+  /** Language of the group's courses (the apprentices' language). */
+  @Column({ type: 'enum', enum: Language, enumName: LANGUAGE_ENUM })
+  language: Language;
 
   /** First ISO weekday (Monday = 1) the apprentices are at school; the pill in the UI. */
   @Column({ type: 'smallint', nullable: true })

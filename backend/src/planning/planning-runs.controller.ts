@@ -34,6 +34,22 @@ export class PlanningRunsController {
     return this.runs.get(id);
   }
 
+  /** Stage 1: (re)generates the demand groups; later drafts of the run are dropped. */
+  @Post(':id/demand')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  generateDemand(
+    @Param('id', uuidPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.runs.generateDemand(id, user);
+  }
+
+  @Get(':id/demand')
+  listDemand(@Param('id', uuidPipe) id: string) {
+    return this.runs.listDemand(id);
+  }
+
   /** Discards a draft run with all its drafts; a committed run is a 409. */
   @Delete(':id')
   @Roles(...WRITE_ROLES)
