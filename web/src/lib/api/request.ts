@@ -9,7 +9,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://loca
 export type ApiFieldError = { field: string; message: string };
 
 /** Error body shape produced by the backend's `HttpExceptionFilter`. */
-type ApiErrorBody = { statusCode?: number; message?: string; errors?: ApiFieldError[] };
+type ApiErrorBody = { statusCode?: number; message?: string; errors?: ApiFieldError[]; details?: unknown };
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +17,8 @@ export class ApiError extends Error {
     message: string,
     /** Field errors (`400 Eingabe ungültig.`); absent for every other error. */
     readonly errors?: ApiFieldError[],
+    /** Structured context of the error, e.g. `{ checkResult }` on a 409 of the assignment check. */
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -69,6 +71,7 @@ export async function sendRequest<T>(
       res.status,
       data?.message ?? res.statusText,
       isFieldErrors(data?.errors) ? data.errors : undefined,
+      data?.details,
     );
   }
   onResponse?.(res);
