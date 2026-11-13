@@ -15,8 +15,21 @@ import { Room } from '../src/locations/room.entity.js';
 import { asInstructor, asPlanner, createTestApp } from './create-app.js';
 
 // Test files run in parallel: this file prefixes its rows with E2ER and plans the
-// school year 2087/88, where no real cohort is in training.
+// school year 2087/88 for an EBA cohort in its third semester: no other test file creates
+// EBA semester-3 modules, so the run never references another file's temporary rows.
 const PERIOD = { periodStartsOn: '2087-08-01', periodEndsOn: '2088-01-31' };
+
+/** Like `.expect(200)`, but shows the body when the status differs (parallel e2e files share the database). */
+async function ok<T extends { status: number; body: unknown }>(
+  request: Promise<T> | T,
+  expected = 200,
+): Promise<T> {
+  const res = await request;
+  if (res.status !== expected)
+    console.error('unexpected status', res.status, JSON.stringify(res.body));
+  expect(res.status).toBe(expected);
+  return res;
+}
 
 describe('Planning runs (e2e)', () => {
   let app: INestApplication<App>;
@@ -51,7 +64,7 @@ describe('Planning runs (e2e)', () => {
         code: 'E2ER-UK',
         name: 'E2ER Kurs',
         kind: 'uk',
-        track: 'efz',
+        track: 'eba',
         durationDays: 1,
         languages: ['de'],
         maxParticipants: 2,
@@ -60,14 +73,14 @@ describe('Planning runs (e2e)', () => {
     ids.cohort = (
       await ds
         .getRepository(Cohort)
-        .save({ track: 'efz', startYear: 2087, label: 'E2ER 2087 EFZ' })
+        .save({ track: 'eba', startYear: 2086, label: 'E2ER 2086 EBA' })
     ).id;
     ids.module = (
       await ds.getRepository(CurriculumModule).save({
-        track: 'efz',
+        track: 'eba',
         courseTypeId: ids.courseType,
-        semester: 1,
-        sequence: 9902,
+        semester: 3,
+        sequence: 9952,
       })
     ).id;
     ids.school = (
@@ -82,8 +95,8 @@ describe('Planning runs (e2e)', () => {
       await ds.getRepository(SchoolClass).save({
         vocationalSchoolId: ids.school,
         code: 'E2ER-K1',
-        track: 'efz',
-        startYear: 2087,
+        track: 'eba',
+        startYear: 2086,
       })
     ).id;
     await ds
@@ -96,7 +109,7 @@ describe('Planning runs (e2e)', () => {
         lastName: 'E2ER Lernende',
         birthDate: '2070-01-01',
         language: 'de',
-        track: 'efz',
+        track: 'eba',
         cohortId: ids.cohort,
         vocationalSchoolId: ids.school,
         schoolClassId,
@@ -140,8 +153,10 @@ describe('Planning runs (e2e)', () => {
     await ds.query(
       `DELETE FROM "vocational_school" WHERE short_name = 'E2ER-BS'`,
     );
-    await ds.query(`DELETE FROM "curriculum_module" WHERE sequence = 9902`);
-    await ds.query(`DELETE FROM "cohort" WHERE label = 'E2ER 2087 EFZ'`);
+    await ds.query(
+      `DELETE FROM "curriculum_module" WHERE course_type_id IN (SELECT id FROM "course_type" WHERE code = 'E2ER-UK')`,
+    );
+    await ds.query(`DELETE FROM "cohort" WHERE label = 'E2ER 2086 EBA'`);
     await ds.query(`DELETE FROM "instructor" WHERE last_name = 'E2ER Lehrer'`);
     await ds.query(`DELETE FROM "course_type" WHERE code = 'E2ER-UK'`);
     await ds.query(`DELETE FROM "location" WHERE code = 'E2ER-LOC'`);
@@ -190,9 +205,9 @@ describe('Planning runs (e2e)', () => {
       created.body.readiness.items.find(
         (i: { rule: string }) => i.rule === name,
       );
-    // The real curriculum has more semester-1 modules; ours is among the ones without a window.
+    // The real curriculum has more EBA semester-3 modules; ours is among the ones without a window.
     expect(rule('time_windows').status).toBe('warning');
-    expect(rule('time_windows').details).toContain('E2ER-UK · E2ER 2087 EFZ');
+    expect(rule('time_windows').details).toContain('E2ER-UK · E2ER 2086 EBA');
     expect(rule('school_days')).toMatchObject({ status: 'warning', count: 1 });
     expect(rule('uk_locations')).toMatchObject({ status: 'ok' });
     ids.run = created.body.id;
@@ -226,22 +241,21 @@ describe('Planning runs (e2e)', () => {
       modulesWithoutTimeWindow: expect.any(Number),
     });
     expect(overview.body.apprenticesWithoutFutureUk).toBeGreaterThanOrEqual(3);
-    // Stage 1: demand. The E2ER cohort is in semester 1, so the real semester-1 modules appear too.
+    // Stage 1: demand. The E2ER cohort is in semester 3, so the real EBA semester-3 modules appear too.
     await api()
       .post(`/planning-runs/${ids.run}/demand`)
       .set(asInstructor)
       .expect(403);
-    const demand = await api()
-      .post(`/planning-runs/${ids.run}/demand`)
-      .set(asPlanner)
-      .expect(200);
+    const demand = await ok(
+      api().post(`/planning-runs/${ids.run}/demand`).set(asPlanner),
+    );
     const ours = demand.body.filter(
       (d: { module: { code: string } }) => d.module.code === 'E2ER-UK',
     );
     expect(ours).toHaveLength(1);
     expect(ours[0]).toMatchObject({
-      cohort: { label: 'E2ER 2087 EFZ' },
-      module: { code: 'E2ER-UK', semester: 1, durationDays: 1 },
+      cohort: { label: 'E2ER 2086 EBA' },
+      module: { code: 'E2ER-UK', semester: 3, durationDays: 1 },
       location: { code: 'E2ER-LOC' },
       language: 'de',
       schoolWeekday: 2,
@@ -263,7 +277,8 @@ describe('Planning runs (e2e)', () => {
       .expect(200);
     expect(afterDemand.body.stage).toBe('demand');
     expect(afterDemand.body.demandSummary).toMatchObject({
-      catchUps: 0,
+      // Semester 3: the real EBA modules of semesters 1 and 2 are uncovered for all three.
+      catchUps: 3,
       apprenticesWithoutClass: 1,
     });
     expect(afterDemand.body.counts.apprentices).toBe(3);
@@ -285,10 +300,9 @@ describe('Planning runs (e2e)', () => {
       .post(`/planning-runs/${ids.run}/courses`)
       .set(asInstructor)
       .expect(403);
-    const proposed = await api()
-      .post(`/planning-runs/${ids.run}/courses`)
-      .set(asPlanner)
-      .expect(200);
+    const proposed = await ok(
+      api().post(`/planning-runs/${ids.run}/courses`).set(asPlanner),
+    );
     const ourCourses = proposed.body.filter(
       (c: { courseType: { code: string } }) => c.courseType.code === 'E2ER-UK',
     );
@@ -347,10 +361,9 @@ describe('Planning runs (e2e)', () => {
       .post(`/planning-runs/${ids.run}/staffing`)
       .set(asInstructor)
       .expect(403);
-    const staffed = await api()
-      .post(`/planning-runs/${ids.run}/staffing`)
-      .set(asPlanner)
-      .expect(200);
+    const staffed = await ok(
+      api().post(`/planning-runs/${ids.run}/staffing`).set(asPlanner),
+    );
     const staffedOurs = staffed.body.filter(
       (c: { courseType: { code: string } }) => c.courseType.code === 'E2ER-UK',
     );

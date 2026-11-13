@@ -22,11 +22,7 @@ import { Instructor } from '../src/instructors/instructor.entity.js';
 import { Skill } from '../src/instructors/skill.entity.js';
 import { Location } from '../src/locations/location.entity.js';
 import { Room } from '../src/locations/room.entity.js';
-import {
-  SnapshotService,
-  WEIGHTS_SETTING,
-} from '../src/planning/snapshot.service.js';
-import { Setting } from '../src/system/setting.entity.js';
+import { SnapshotService } from '../src/planning/snapshot.service.js';
 import { createTestApp } from './create-app.js';
 
 // Test files run in parallel: this file prefixes its rows with E2EP.
@@ -35,7 +31,6 @@ describe('Planning snapshot (e2e)', () => {
   let ds: DataSource;
   let snapshots: SnapshotService;
   const ids: Record<string, string> = {};
-  let previousWeights: unknown = undefined;
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -53,25 +48,21 @@ describe('Planning snapshot (e2e)', () => {
     });
     ids.location = location.id;
     ids.room = (
-      await ds
-        .getRepository(Room)
-        .save({
-          locationId: location.id,
-          name: 'E2EP Raum',
-          kind: 'theory',
-          capacity: 12,
-        })
+      await ds.getRepository(Room).save({
+        locationId: location.id,
+        name: 'E2EP Raum',
+        kind: 'theory',
+        capacity: 12,
+      })
     ).id;
     ids.skill = (await ds.getRepository(Skill).save({ name: 'E2EP Skill' })).id;
     ids.certificateType = (
-      await ds
-        .getRepository(CertificateType)
-        .save({
-          code: 'E2EP-CT',
-          name: 'E2EP Zertifikat',
-          validityYears: 5,
-          maintenanceMinPerYear: 2,
-        })
+      await ds.getRepository(CertificateType).save({
+        code: 'E2EP-CT',
+        name: 'E2EP Zertifikat',
+        validityYears: 5,
+        maintenanceMinPerYear: 2,
+      })
     ).id;
     ids.courseType = (
       await ds.getRepository(CourseType).save({
@@ -87,32 +78,26 @@ describe('Planning snapshot (e2e)', () => {
     await ds
       .getRepository(CourseTypeSkill)
       .insert({ courseTypeId: ids.courseType, skillId: ids.skill });
-    await ds
-      .getRepository(CourseTypeCertificate)
-      .insert({
-        courseTypeId: ids.courseType,
-        certificateTypeId: ids.certificateType,
-      });
-    await ds
-      .getRepository(CertificateTypeMaintenanceCourseType)
-      .insert({
-        certificateTypeId: ids.certificateType,
-        courseTypeId: ids.courseType,
-      });
+    await ds.getRepository(CourseTypeCertificate).insert({
+      courseTypeId: ids.courseType,
+      certificateTypeId: ids.certificateType,
+    });
+    await ds.getRepository(CertificateTypeMaintenanceCourseType).insert({
+      certificateTypeId: ids.certificateType,
+      courseTypeId: ids.courseType,
+    });
     ids.cohort = (
       await ds
         .getRepository(Cohort)
         .save({ track: 'efz', startYear: 2088, label: 'E2EP 2088 EFZ' })
     ).id;
     ids.module = (
-      await ds
-        .getRepository(CurriculumModule)
-        .save({
-          track: 'efz',
-          courseTypeId: ids.courseType,
-          semester: 4,
-          sequence: 9901,
-        })
+      await ds.getRepository(CurriculumModule).save({
+        track: 'efz',
+        courseTypeId: ids.courseType,
+        semester: 4,
+        sequence: 9951,
+      })
     ).id;
     ids.school = (
       await ds.getRepository(VocationalSchool).save({
@@ -123,14 +108,12 @@ describe('Planning snapshot (e2e)', () => {
       })
     ).id;
     ids.class = (
-      await ds
-        .getRepository(SchoolClass)
-        .save({
-          vocationalSchoolId: ids.school,
-          code: 'E2EP-K1',
-          track: 'efz',
-          startYear: 2088,
-        })
+      await ds.getRepository(SchoolClass).save({
+        vocationalSchoolId: ids.school,
+        code: 'E2EP-K1',
+        track: 'efz',
+        startYear: 2088,
+      })
     ).id;
     await ds
       .getRepository(SchoolClassDay)
@@ -197,24 +180,14 @@ describe('Planning snapshot (e2e)', () => {
         roomId: ids.room,
       },
     ]);
-    await ds
-      .getRepository(Assignment)
-      .insert({
-        courseId: ids.course,
-        instructorId: ids.instructor,
-        status: 'confirmed',
-      });
+    await ds.getRepository(Assignment).insert({
+      courseId: ids.course,
+      instructorId: ids.instructor,
+      status: 'confirmed',
+    });
     await ds
       .getRepository(Enrollment)
       .insert({ courseId: ids.course, apprenticeId: ids.apprenticeA });
-
-    const settings = ds.getRepository(Setting);
-    previousWeights = (await settings.findOneBy({ key: WEIGHTS_SETTING }))
-      ?.value;
-    await settings.upsert(
-      { key: WEIGHTS_SETTING, value: { homeLocation: 40, nonsense: 'x' } },
-      ['key'],
-    );
   });
 
   afterAll(async () => {
@@ -223,14 +196,6 @@ describe('Planning snapshot (e2e)', () => {
   });
 
   async function cleanup(): Promise<void> {
-    const settings = ds.getRepository(Setting);
-    if (previousWeights === undefined)
-      await settings.delete({ key: WEIGHTS_SETTING });
-    else
-      await settings.upsert(
-        { key: WEIGHTS_SETTING, value: previousWeights as object },
-        ['key'],
-      );
     await ds.query(
       `DELETE FROM "course" WHERE course_type_id IN (SELECT id FROM "course_type" WHERE code = 'E2EP-UK')`,
     );
@@ -241,7 +206,9 @@ describe('Planning snapshot (e2e)', () => {
     await ds.query(
       `DELETE FROM "vocational_school" WHERE short_name = 'E2EP-BS'`,
     );
-    await ds.query(`DELETE FROM "curriculum_module" WHERE sequence = 9901`);
+    await ds.query(
+      `DELETE FROM "curriculum_module" WHERE course_type_id IN (SELECT id FROM "course_type" WHERE code = 'E2EP-UK')`,
+    );
     await ds.query(`DELETE FROM "cohort" WHERE label = 'E2EP 2088 EFZ'`);
     await ds.query(`DELETE FROM "instructor" WHERE last_name = 'E2EP Lehrer'`);
     await ds.query(`DELETE FROM "course_type" WHERE code = 'E2EP-UK'`);
@@ -333,11 +300,9 @@ describe('Planning snapshot (e2e)', () => {
       }),
     ]);
 
-    expect(s.weights).toMatchObject({
-      homeLocation: 40,
-      sameRegion: 12,
-      base: 50,
-    });
+    // Defaults unless the setting `planning.weights` overrides single keys (unit-tested in snapshot.service.spec.ts).
+    expect(s.weights).toMatchObject({ sameRegion: 12, base: 50 });
+    expect(typeof s.weights.homeLocation).toBe('number');
     expect(s.holidays.has('2027-08-01')).toBe(true);
     expect(s.holidays.has('2027-03-29')).toBe(true);
   });
