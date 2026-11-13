@@ -173,6 +173,22 @@ describe('Courses (e2e)', () => {
     expect(paged.headers['x-total-count']).toBe('2');
     expect(paged.body.map((r: { id: string }) => r.id)).toEqual([courseB]);
 
+    // Drafts of planning runs stay hidden unless asked for.
+    await ds.getRepository(Course).update(courseB, { status: 'demand' });
+    const withoutDrafts = await api()
+      .get(`/courses?from=2027-01-01&locationId=${locationId}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(withoutDrafts.body.map((r: { id: string }) => r.id)).toEqual([
+      courseA,
+    ]);
+    const drafts = await api()
+      .get(`/courses?from=2027-01-01&locationId=${locationId}&status=demand`)
+      .set(asPlanner)
+      .expect(200);
+    expect(drafts.body.map((r: { id: string }) => r.id)).toEqual([courseB]);
+    await ds.getRepository(Course).update(courseB, { status: 'planned' });
+
     await api().get('/courses?from=2027-13-01').set(asPlanner).expect(400);
     await api().get('/courses?staffing=maybe').set(asPlanner).expect(400);
   });

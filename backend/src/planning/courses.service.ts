@@ -162,7 +162,8 @@ export class CoursesService {
   /**
    * Durchführungen with their dates and instructors, filtered and (with
    * `page`) paged; the total goes into `X-Total-Count`. Without `from` the
-   * list starts today, unless it is scoped to a planning run.
+   * list starts today, unless it is scoped to a planning run; drafts of
+   * planning runs (status `demand`) appear only with a status or run filter.
    */
   async list(
     query: ListCoursesQuery,
@@ -186,8 +187,12 @@ export class CoursesService {
       });
     }
     if (query.kind) qb.andWhere('ct.kind = :kind', { kind: query.kind });
-    if (query.status)
+    if (query.status) {
       qb.andWhere('c.status = :status', { status: query.status });
+    } else if (!query.planningRunId) {
+      // Drafts of planning runs stay out of the list unless asked for (status or run filter).
+      qb.andWhere('c.status <> :draft', { draft: CourseStatus.Demand });
+    }
     if (query.language)
       qb.andWhere('c.language = :language', { language: query.language });
     if (query.staffing === 'unstaffed')

@@ -94,8 +94,10 @@ REST, plural English nouns, arrays with server-side filters, no pagination. Ever
 | Berufsschulen | `/vocational-schools`, `/vocational-schools/:id/classes`, `/school-classes/:id` (+ `PUT /:id/days`) |
 | Lernende | `GET /apprentices` (+ filters), `GET /apprentices/:id` |
 | Me | `GET /me` |
+| Durchführungen | `GET /courses` (+ filters, `?staffing=unstaffed`, `?planningRunId=`), `GET /courses/:id`, `GET /courses/:id/candidates`, `GET /courses/:id/check/:instructorId`, `POST /courses/:id/assignments`, `POST /courses/staff` (automatic staffing), `POST /assignments/:id/confirm`, `DELETE /assignments/:id` |
+| Planungslauf | `GET /planning/overview`, `/planning-runs`, `POST /planning-runs/:id/{demand,courses,staffing,commit}`, `GET /planning-runs/:id/{demand,courses,issues,summary}`, `GET /planning-runs/:id/courses/:courseId/fix-options`, `POST …/fix`, `DELETE /planning-runs/:id` (discard) |
 
-Design: `docs/superpowers/specs/2026-10-01-stammdaten-crud-design.md`.
+Design: `docs/superpowers/specs/2026-10-01-stammdaten-crud-design.md`; planning engine: `docs/superpowers/specs/2026-10-30-planning-engine-design.md` and the plan `docs/superpowers/plans/2026-11-13-planning-run.md`. The engine itself is pure TypeScript in `src/planning/engine/` with a unit test per rule.
 
 ## Tests
 
