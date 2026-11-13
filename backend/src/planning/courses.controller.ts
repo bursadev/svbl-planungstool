@@ -18,6 +18,7 @@ import { uuidPipe } from '../common/uuid.pipe.js';
 import { CoursesService } from './courses.service.js';
 import {
   AssignInstructorDto,
+  AutoStaffDto,
   CandidatesQuery,
   ListCoursesQuery,
 } from './dto/course.dto.js';
@@ -32,6 +33,14 @@ export class CoursesController {
     @Res({ passthrough: true }) res: Response,
   ) {
     return sendPage(res, await this.courses.list(query));
+  }
+
+  /** Automatic staffing of the unstaffed courses in a range; `dryRun` only reports. */
+  @Post('staff')
+  @Roles(...WRITE_ROLES)
+  @HttpCode(200)
+  staff(@Body() dto: AutoStaffDto, @CurrentUser() user: AuthUser) {
+    return this.courses.autoStaff(dto, user);
   }
 
   @Get(':id')

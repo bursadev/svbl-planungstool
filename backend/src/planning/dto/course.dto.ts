@@ -94,3 +94,24 @@ export class AssignInstructorDto {
   @IsBoolean()
   force?: boolean;
 }
+
+/** POST /courses/staff: proposes instructors for the unstaffed courses of a range; `dryRun` only reports. */
+export class AutoStaffDto {
+  @IsDateOnly()
+  from: string;
+
+  @IsDateOnly()
+  to: string;
+
+  @IsOptional()
+  @IsUUID()
+  locationId?: string;
+
+  @IsOptional()
+  @IsEnum(CourseKind)
+  kind?: CourseKind;
+
+  @IsOptional()
+  @IsBoolean()
+  dryRun?: boolean;
+}

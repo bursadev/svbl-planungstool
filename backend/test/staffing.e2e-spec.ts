@@ -18,6 +18,7 @@ describe('Staffing (e2e)', () => {
   let ida: string;
   let jean: string;
   let courseId: string;
+  let secondCourseId: string;
   const api = () => request(app.getHttpServer());
 
   beforeAll(async () => {
@@ -66,6 +67,22 @@ describe('Staffing (e2e)', () => {
     await ds.getRepository(CourseDay).insert({
       courseId,
       heldOn: '2027-03-02',
+      startsAt: '08:15',
+      endsAt: '16:45',
+      sequence: 1,
+    });
+    secondCourseId = (
+      await ds.getRepository(Course).save({
+        courseTypeId,
+        locationId,
+        language: 'de',
+        capacity: 12,
+        externalRef: 'E2EA-2',
+      })
+    ).id;
+    await ds.getRepository(CourseDay).insert({
+      courseId: secondCourseId,
+      heldOn: '2027-03-09',
       startsAt: '08:15',
       endsAt: '16:45',
       sequence: 1,
@@ -239,5 +256,64 @@ describe('Staffing (e2e)', () => {
       'hat die Zuweisung von Ida E2EA Lehrer für E2EA-UK E2EA Ort KW 9 bestätigt',
       'hat die Zuweisung von Jean E2EA Lehrer für E2EA-UK E2EA Ort KW 9 aufgehoben',
     ]);
+  });
+
+  it('staffs the unstaffed courses of a range automatically', async () => {
+    const body = {
+      from: '2027-03-01',
+      to: '2027-03-31',
+      locationId,
+      dryRun: true,
+    };
+    await api().post('/courses/staff').set(asInstructor).send(body).expect(403);
+    await api()
+      .post('/courses/staff')
+      .set(asPlanner)
+      .send({ ...body, from: 'nope' })
+      .expect(400);
+
+    const dry = await api()
+      .post('/courses/staff')
+      .set(asPlanner)
+      .send(body)
+      .expect(200);
+    expect(dry.body.dryRun).toBe(true);
+    expect(dry.body.unstaffed).toEqual([]);
+    expect(dry.body.staffed).toEqual([
+      expect.objectContaining({
+        courseId: secondCourseId,
+        code: 'E2EA-UK',
+        location: 'E2EA Ort',
+        isoWeek: 10,
+        score: 85,
+      }),
+    ]);
+    const untouched = await api()
+      .get(`/courses/${secondCourseId}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(untouched.body.assignments).toEqual([]);
+
+    const real = await api()
+      .post('/courses/staff')
+      .set(asPlanner)
+      .send({ ...body, dryRun: false })
+      .expect(200);
+    expect(real.body.staffed).toHaveLength(1);
+    const detail = await api()
+      .get(`/courses/${secondCourseId}`)
+      .set(asPlanner)
+      .expect(200);
+    expect(detail.body.assignments).toEqual([
+      expect.objectContaining({ status: 'proposed', role: 'lead', score: 85 }),
+    ]);
+
+    const again = await api()
+      .post('/courses/staff')
+      .set(asPlanner)
+      .send(body)
+      .expect(200);
+    expect(again.body.staffed).toEqual([]);
+    expect(again.body.unstaffed).toEqual([]);
   });
 });

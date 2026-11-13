@@ -24,6 +24,7 @@ import {
 import { AuditService, snapshot } from '../system/audit.service.js';
 import type {
   AssignInstructorDto,
+  AutoStaffDto,
   CandidatesQuery,
   ListCoursesQuery,
 } from './dto/course.dto.js';
@@ -36,6 +37,7 @@ import {
   type EngineContext,
 } from './engine/check.js';
 import { Ledger } from './engine/ledger.js';
+import { staffCourses } from './engine/staffing.js';
 import type { IsoDate, PlanningSnapshot } from './engine/types.js';
 import { SnapshotService } from './snapshot.service.js';
 
@@ -94,6 +96,24 @@ export interface CourseAssignmentView {
 export interface CandidateView {
   instructor: CourseAssignmentView['instructor'];
   result: AssignmentCheckResult;
+}
+
+interface AutoStaffCourseRef {
+  courseId: string;
+  code: string;
+  location: string;
+  isoWeek: number | null;
+}
+
+/** Answer of POST /courses/staff. */
+export interface AutoStaffReport {
+  dryRun: boolean;
+  staffed: (AutoStaffCourseRef & {
+    instructor: { id: string; firstName: string; lastName: string };
+    score: number;
+    candidateCount: number;
+  })[];
+  unstaffed: (AutoStaffCourseRef & { reason: string })[];
 }
 
 export interface CourseDetail extends CourseRow {
@@ -377,6 +397,108 @@ export class CoursesService {
       before: snapshot(assignment),
       summary: `hat die Zuweisung von ${assignment.instructor.firstName} ${assignment.instructor.lastName} für ${courseLabel(assignment.course)} aufgehoben`,
     });
+  }
+
+  /**
+   * Staffs every unstaffed course (planned, confirmed or open) of the range
+   * with the engine's best feasible instructor; writes proposed assignments
+   * unless `dryRun`.
+   */
+  async autoStaff(
+    dto: AutoStaffDto,
+    actor: AuthUser,
+  ): Promise<AutoStaffReport> {
+    if (dto.from > dto.to) {
+      throw new ConflictException('Das Enddatum liegt vor dem Startdatum.');
+    }
+    const qb = this.courses
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.courseType', 'ct')
+      .leftJoinAndSelect('c.location', 'l')
+      .leftJoinAndSelect('c.days', 'd')
+      .leftJoinAndSelect('c.assignments', 'a')
+      .where(`${STARTS_ON_SQL} BETWEEN :from AND :to`, {
+        from: dto.from,
+        to: dto.to,
+      })
+      .andWhere('c.status IN (:...statuses)', {
+        statuses: [
+          CourseStatus.Planned,
+          CourseStatus.Confirmed,
+          CourseStatus.Open,
+        ],
+      })
+      .andWhere(`NOT ${HAS_INSTRUCTOR_SQL}`);
+    if (dto.locationId)
+      qb.andWhere('c.locationId = :locationId', { locationId: dto.locationId });
+    if (dto.kind) qb.andWhere('ct.kind = :kind', { kind: dto.kind });
+    const courses = (await qb.getMany()).sort((a, b) =>
+      a.id.localeCompare(b.id),
+    );
+    const snap = await this.snapshots.load(
+      { from: dto.from, to: dto.to },
+      { includeApprentices: false },
+    );
+    const ctx: EngineContext = {
+      snapshot: snap,
+      ledger: Ledger.fromSnapshot(snap),
+      today: snap.asOf,
+    };
+    const result = staffCourses(courses.map(toCourseToStaff), ctx);
+    const courseOf = new Map(courses.map((c) => [c.id, c]));
+    const ref = (courseId: string): AutoStaffCourseRef => {
+      const course = courseOf.get(courseId)!;
+      const dates = sortedDates(course);
+      return {
+        courseId,
+        code: course.courseType.code,
+        location: course.location.name,
+        isoWeek: dates.length ? isoWeek(dates[0]).week : null,
+      };
+    };
+    const dryRun = dto.dryRun ?? false;
+    if (!dryRun) {
+      for (const s of result.staffed) {
+        const instructor = snap.instructors.get(s.instructorId)!;
+        const assignment = this.assignments.create({
+          courseId: s.courseId,
+          instructorId: s.instructorId,
+          role: AssignmentRole.Lead,
+          status: AssignmentStatus.Proposed,
+          checkResult: s.result,
+          score: s.result.score,
+        });
+        await this.assignments.save(assignment);
+        await this.audit.record({
+          actorUserId: actor.dbUserId,
+          entityType: 'assignment',
+          entityId: assignment.id,
+          action: 'create',
+          after: snapshot(assignment),
+          summary: `hat ${instructor.firstName} ${instructor.lastName} dem Kurs ${courseLabel(courseOf.get(s.courseId)!)} automatisch zugewiesen (Score ${s.result.score})`,
+        });
+      }
+    }
+    return {
+      dryRun,
+      staffed: result.staffed.map((s) => {
+        const instructor = snap.instructors.get(s.instructorId)!;
+        return {
+          ...ref(s.courseId),
+          instructor: {
+            id: instructor.id,
+            firstName: instructor.firstName,
+            lastName: instructor.lastName,
+          },
+          score: s.result.score,
+          candidateCount: s.candidateCount,
+        };
+      }),
+      unstaffed: result.unstaffed.map((u) => ({
+        ...ref(u.courseId),
+        reason: u.reason,
+      })),
+    };
   }
 
   /** Snapshot and ledger around the course's dates; apprentices are not needed for staffing. */
