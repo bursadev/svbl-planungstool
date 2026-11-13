@@ -14,6 +14,11 @@ import { CoursesService } from './courses.service.js';
 import { DemandApprentice } from './demand-apprentice.entity.js';
 import { Demand } from './demand.entity.js';
 import { PlanningRun } from './planning-run.entity.js';
+import {
+  PlanningController,
+  PlanningRunsController,
+} from './planning-runs.controller.js';
+import { PlanningRunsService } from './planning-runs.service.js';
 import { SnapshotService } from './snapshot.service.js';
 
 @Module({
@@ -30,8 +35,18 @@ import { SnapshotService } from './snapshot.service.js';
     ]),
     SystemModule,
   ],
-  controllers: [CoursesController, AssignmentsController],
-  providers: [SnapshotService, CoursesService],
-  exports: [TypeOrmModule, SnapshotService, CoursesService],
+  controllers: [
+    CoursesController,
+    AssignmentsController,
+    PlanningRunsController,
+    PlanningController,
+  ],
+  providers: [SnapshotService, CoursesService, PlanningRunsService],
+  exports: [
+    TypeOrmModule,
+    SnapshotService,
+    CoursesService,
+    PlanningRunsService,
+  ],
 })
 export class PlanningModule {}
