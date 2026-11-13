@@ -117,6 +117,12 @@ export interface SnapshotAvailability {
   status: AvailabilityStatus;
 }
 
+export interface SnapshotDeviceType {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface SnapshotDeviceQualification {
   deviceTypeId: string;
   certificateTypeId: string | null;
@@ -238,6 +244,7 @@ export interface PlanningSnapshot {
   certificateTypes: Map<string, SnapshotCertificateType>;
   instructors: Map<string, SnapshotInstructor>;
   availabilities: SnapshotAvailability[];
+  deviceTypes: Map<string, SnapshotDeviceType>;
   deviceQualifications: SnapshotDeviceQualification[];
   devices: Map<string, SnapshotDevice>;
   courses: Map<string, SnapshotCourse>;

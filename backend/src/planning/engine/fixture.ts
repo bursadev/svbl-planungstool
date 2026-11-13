@@ -292,6 +292,7 @@ export function buildSnapshot(
         status: AvailabilityStatus.Requested,
       },
     ],
+    deviceTypes: byId([{ id: 'forklift', code: 'STAPLER', name: 'Stapler' }]),
     deviceQualifications: [
       { deviceTypeId: 'forklift', certificateTypeId: 'SUVA', skillId: null },
     ],
